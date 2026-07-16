@@ -1,0 +1,153 @@
+@import "tailwindcss";
+
+@theme {
+  /* Surfaces */
+  --color-page: #0b1220;
+  --color-panel: #111a2e;
+  --color-panel-2: #16203a;
+  --color-panel-3: #1c2947;
+  --color-edge: rgba(255, 255, 255, 0.08);
+  --color-edge-strong: rgba(255, 255, 255, 0.14);
+
+  /* Ink */
+  --color-ink: #e2e8f0;
+  --color-ink-muted: #94a3b8;
+  --color-ink-faint: #64748b;
+
+  /* Semantics */
+  --color-ok: #10b981;
+  --color-ok-soft: #34d399;
+  --color-bad: #ef4444;
+  --color-bad-soft: #f87171;
+  --color-warn: #f59e0b;
+  --color-warn-soft: #fbbf24;
+  --color-info: #38bdf8;
+  --color-ledger: #a78bfa;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.35), 0 6px 20px rgba(0, 0, 0, 0.22);
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background-color: var(--color-page);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  background-image:
+    radial-gradient(1100px 480px at 18% -8%, rgba(56, 189, 248, 0.055), transparent 60%),
+    radial-gradient(900px 420px at 85% -10%, rgba(167, 139, 250, 0.05), transparent 60%);
+  background-attachment: fixed;
+}
+
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- animation utilities ---- */
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+.pulse {
+  animation: pulse-dot 1.5s ease-in-out infinite;
+}
+
+@keyframes ring-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.45);
+  }
+  70% {
+    box-shadow: 0 0 0 7px rgba(56, 189, 248, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(56, 189, 248, 0);
+  }
+}
+.ring-pulse {
+  animation: ring-pulse 1.4s ease-out infinite;
+}
+
+@keyframes toast-in {
+  from {
+    transform: translateX(28px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+.toast-in {
+  animation: toast-in 0.25s ease-out both;
+}
+
+@keyframes card-in {
+  from {
+    transform: translateY(-7px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+.card-in {
+  animation: card-in 0.3s ease-out both;
+}
+
+@keyframes alarm-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.45), 0 0 24px rgba(239, 68, 68, 0.14);
+  }
+  50% {
+    box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.8), 0 0 34px rgba(239, 68, 68, 0.28);
+  }
+}
+.alarm-glow {
+  animation: alarm-glow 1.8s ease-in-out infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.spin {
+  animation: spin 0.8s linear infinite;
+}
+
+/* ---- scrollbars ---- */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #2b3a58 transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: #2b3a58;
+  border-radius: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* recharts surface resets */
+.recharts-wrapper {
+  font-family: var(--font-sans);
+}

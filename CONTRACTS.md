@@ -155,5 +155,30 @@ meters `MTR-1001..MTR-1006`. Seeded at boot (NFR-4).
 
 - **legit**: bank→CONFIRM, all signers online, submit (e.g. 50 kWh). Expect full green: DELIVERED, Δ stays 0.
 - **ghost**: bank→DECLINE, submit, expect REJECTED at WALL_1_BANK + critical alert; then bank→CONFIRM restored.
-- **collusion-short**: city-a + city-b offline (only utility online), submit, expect REJECTED at WALL_2_CONSORTIUM
-  (below threshold, no round1 ever happens); then signers restored online.
+- **collusion-short**: city-a + city-b offline (only utility online), submit, expect REJECTED at WALL_2_CONSORTIUM.
+  Since the pre-flight quorum check (below) runs BEFORE the bank debit, **no debit is taken** — clean Wall-2
+  rejection, no money moved; then signers restored online.
+
+---
+
+## Post-review hardening (adversarial review, 2026-07-16)
+
+A multi-agent adversarial review found that FR-20 ("one debit, one token") was enforced only by the coordinator's
+in-memory registry — but the coordinator is the assumed adversary, so a compromised coordinator could replay one
+genuine bank-signed debit into unlimited tokens by calling the signers directly. Changes that move the binding into
+the independent walls (see [SECURITY.md](SECURITY.md)):
+
+1. **Token is bound to the debit at Wall 2.** The bank now signs `meterId` + `amountKwh` (added to `DebitRequest`,
+   `DebitConfirmation`, `DebitSignedPayload`). The token nonce is **deterministic**: `nonce = deriveTokenNonce(debitRef)`
+   (`server/src/common/token.ts`). `TokenPayload` gains `debitRef`. Each signer verifies the token equals exactly
+   `buildTokenPayload(debit)` (new round-2 check → `400 TOKEN_NOT_DEBIT_BOUND`) and that `debit.meterId`/`debit.amountKwh`
+   match the request (folded into the `401 WALL_1_MISMATCH` check). Result: exactly one valid token per debit; a
+   compromised coordinator cannot mint a second distinct token. The meter also dedups on `debitRef` (belt-and-braces).
+2. **Pre-flight quorum check** before the debit (fail fast at Wall 2, no money moved); the post-debit below-threshold
+   path stays as the FR-21 race backstop.
+3. **Reconciliation counts distinct debitRefs / tx hashes** so a same-debit double-mint would surface as Δ≠0 (FR-D3).
+4. **Meter pre-verification before the XRPL write** — no orphan on-chain record for a token the meter would reject.
+5. **Signer sessions deleted on every terminal round-2 outcome** (refuse / check-failure), not only on success.
+6. **FR-14 anti-spam**: per-merchant sliding-window rate limit on `POST /api/requests` (20 / 10 s → `429 RATE_LIMITED`).
+7. **Dashboard**: dropped the redundant reconnect fetch that could revert fresher WS state; alert badge tracks unseen
+   by id (works past the 100-alert cap); demo outcome label says `ABANDONED …` for `REJECTED_ABANDONED`.

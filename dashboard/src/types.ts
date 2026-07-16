@@ -1,6 +1,6 @@
 /**
- * Shared domain types — the single source of truth for every service.
- * The dashboard mirrors these in dashboard/src/types.ts (kept in sync via CONTRACTS.md).
+ * Mirror of server/src/common/types.ts (kept in sync via CONTRACTS.md).
+ * Names are identical to the server-side normative types.
  */
 
 export type RequestStatus =
@@ -17,7 +17,6 @@ export type Wall = 'WALL_1_BANK' | 'WALL_2_CONSORTIUM' | 'LEDGER' | 'POLICY';
 
 export type SignerId = 'utility' | 'city-a' | 'city-b';
 
-/** §4.1 Generation request */
 export interface GenerationRequest {
   requestId: string;
   meterId: string;
@@ -26,38 +25,28 @@ export interface GenerationRequest {
   timestamp: string; // ISO-8601
 }
 
-/** §4.2 Confirmed-debit reference (Wall 1). bankSignature is Ed25519 over canonicalBytes of the payload minus bankSignature.
- *  meterId + amountKwh are bank-ATTESTED so Wall 2 can bind the token to the paid economic content without trusting the coordinator. */
 export interface DebitConfirmation {
   debitRef: string;
   requestId: string;
-  meterId: string; // bank attests WHICH meter this payment authorises (prevents coordinator retargeting)
-  amountKwh: number; // bank attests HOW MANY units were paid for
-  amount: number; // currency amount debited
+  meterId: string;
+  amountKwh: number;
+  amount: number;
   currency: string; // 'ZAR'
   confirmedAt: string;
   bankSignature: string; // hex
 }
 
-/** The exact payload the bank signs (canonical form of DebitConfirmation without bankSignature). */
-export type DebitSignedPayload = Omit<DebitConfirmation, 'bankSignature'>;
-
-/** §4.3 Token payload — the message signed by the FROST quorum is canonicalBytes(TokenPayload).
- *  Every field is DETERMINED by the bank-signed debit: meterId/amountKwh/debitRef come from it and
- *  nonce = deriveTokenNonce(debitRef). There is therefore exactly ONE valid token per debit, so a
- *  compromised coordinator cannot mint a second distinct token from one debit (FR-20 enforced at Wall 2). */
 export interface TokenPayload {
   meterId: string;
   amountKwh: number;
-  debitRef: string; // binds the token to the one debit that paid for it
-  nonce: string; // hex, 16 bytes — deterministic in debitRef (replay collapses at the meter)
+  nonce: string; // hex, 16 bytes
+  debitRef: string;
 }
 
 export interface Token extends TokenPayload {
-  signature: string; // hex, 64-byte Ed25519 (FROST aggregate), verifies against group public key
+  signature: string; // hex, 64-byte Ed25519 (FROST aggregate)
 }
 
-/** §4.4 On-chain authorisation record (hashes only, POPIA-safe). */
 export interface LedgerRecord {
   requestHash: string;
   debitRefHash: string;
@@ -83,7 +72,6 @@ export interface StatusTransition {
   note?: string;
 }
 
-/** Full lifecycle of a request as tracked by the coordinator. */
 export interface PipelineRecord {
   request: GenerationRequest;
   status: RequestStatus;
@@ -97,24 +85,7 @@ export interface PipelineRecord {
   meterDelivery?: { verified: boolean; dispensedKwh: number; at: string };
 }
 
-// ---------------------------------------------------------------------------
-// Bank service
-// ---------------------------------------------------------------------------
-
 export type BankMode = 'CONFIRM' | 'DECLINE' | 'OMIT_SIGNATURE' | 'TIMEOUT';
-
-export interface DebitRequest {
-  requestId: string;
-  merchantId: string;
-  meterId: string;
-  amountKwh: number;
-  amount: number;
-  currency: string;
-}
-
-// ---------------------------------------------------------------------------
-// Signer service
-// ---------------------------------------------------------------------------
 
 export interface SignerHealth {
   signerId: SignerId;
@@ -125,33 +96,8 @@ export interface SignerHealth {
   sharePresent: boolean;
   refuse: boolean;
   lastPartialAt: string | null;
-  revoked: boolean; // set by coordinator governance, not the signer itself
+  revoked: boolean;
 }
-
-export interface Round1Response {
-  signerId: SignerId;
-  identifier: number;
-  commitment: { hiding: string; binding: string }; // hex points
-}
-
-export interface Round2Request {
-  sessionId: string; // == requestId
-  messageHex: string; // hex(canonicalBytes(TokenPayload)) — signers re-derive and compare
-  tokenPayload: TokenPayload;
-  request: GenerationRequest;
-  debit: DebitConfirmation;
-  commitments: Array<{ identifier: number; hiding: string; binding: string }>;
-}
-
-export interface Round2Response {
-  signerId: SignerId;
-  identifier: number;
-  zi: string; // hex scalar — partial signature share
-}
-
-// ---------------------------------------------------------------------------
-// Governance / consortium
-// ---------------------------------------------------------------------------
 
 export interface ConsortiumMember {
   signerId: SignerId;
@@ -166,7 +112,7 @@ export interface ConsortiumMember {
 export interface GovernanceLogEntry {
   id: string;
   at: string;
-  action: string; // e.g. 'MEMBER_REVOKED', 'MEMBER_REINSTATED', 'MERCHANT_REVOKED'
+  action: string;
   subject: string;
   actor: string;
   detail?: string;
@@ -179,10 +125,6 @@ export interface Merchant {
   revoked: boolean;
 }
 
-// ---------------------------------------------------------------------------
-// Reconciliation (§6.2-C)
-// ---------------------------------------------------------------------------
-
 export interface ReconciliationPoint {
   t: string; // ISO timestamp
   tokens: number;
@@ -192,15 +134,11 @@ export interface ReconciliationPoint {
 
 export interface Reconciliation {
   tokensIssued: number;
-  confirmedDebits: number; // net of FR-21 reversals
+  confirmedDebits: number;
   onChainRecords: number;
   delta: number; // MUST be 0 in honest operation
   series: ReconciliationPoint[];
 }
-
-// ---------------------------------------------------------------------------
-// Alerts + live events
-// ---------------------------------------------------------------------------
 
 export interface Alert {
   id: string;
@@ -255,5 +193,10 @@ export type WsEvent =
   | { type: 'consortium.status'; consortium: ConsortiumStatus }
   | { type: 'reconciliation'; reconciliation: Reconciliation }
   | { type: 'alert'; alert: Alert }
-  | { type: 'governance.updated'; members: ConsortiumMember[]; merchants: Merchant[]; governanceLog: GovernanceLogEntry[] }
+  | {
+      type: 'governance.updated';
+      members: ConsortiumMember[];
+      merchants: Merchant[];
+      governanceLog: GovernanceLogEntry[];
+    }
   | { type: 'meter.updated'; meter: MeterState };
