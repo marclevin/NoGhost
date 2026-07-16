@@ -1,0 +1,24 @@
+{
+  "name": "two-walls",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Two Walls — stopping insider fraud in prepaid electricity tokens (UZH PoC)",
+  "type": "module",
+  "workspaces": [
+    "server",
+    "dashboard"
+  ],
+  "scripts": {
+    "setup": "npm run setup:keys -w server",
+    "test": "npm run test -w server",
+    "typecheck": "npm run typecheck -w server && npm run typecheck -w dashboard",
+    "bank": "npm -w server run bank",
+    "signers": "concurrently -k -n utility,city-a,city-b -c cyan,magenta,blue \"npm -w server run signer:utility\" \"npm -w server run signer:city-a\" \"npm -w server run signer:city-b\"",
+    "coordinator": "npm -w server run coordinator",
+    "backend": "concurrently -k -n bank,utility,city-a,city-b,coord -c yellow,cyan,magenta,blue,green \"npm -w server run bank\" \"npm -w server run signer:utility\" \"npm -w server run signer:city-a\" \"npm -w server run signer:city-b\" \"npm -w server run coordinator\"",
+    "dev": "concurrently -k -n bank,utility,city-a,city-b,coord,dash -c yellow,cyan,magenta,blue,green,white \"npm -w server run bank\" \"npm -w server run signer:utility\" \"npm -w server run signer:city-a\" \"npm -w server run signer:city-b\" \"npm -w server run coordinator\" \"npm -w dashboard run dev\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0"
+  }
+}

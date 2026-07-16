@@ -1,1 +1,6 @@
 .env
+node_modules/
+dist/
+server/keys/
+*.log
+.vite/

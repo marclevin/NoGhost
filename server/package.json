@@ -1,0 +1,35 @@
+{
+  "name": "@two-walls/server",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "setup:keys": "tsx src/scripts/setup-keys.ts",
+    "xrpl:smoke": "tsx src/scripts/xrpl-smoke.ts",
+    "bank": "tsx src/bank/index.ts",
+    "signer:utility": "tsx src/signer/index.ts utility",
+    "signer:city-a": "tsx src/signer/index.ts city-a",
+    "signer:city-b": "tsx src/signer/index.ts city-b",
+    "coordinator": "tsx src/coordinator/index.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@noble/curves": "~1.9.0",
+    "@noble/hashes": "~1.8.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2",
+    "ws": "^8.18.0",
+    "xrpl": "^4.4.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.14.0",
+    "@types/ws": "^8.5.12",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.9"
+  }
+}
