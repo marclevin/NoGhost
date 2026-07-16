@@ -24,7 +24,7 @@ export default function App() {
             <span className="h-full w-1.5 rounded-sm bg-info" />
           </span>
           <div>
-            <div className="text-lg font-bold tracking-wide text-ink">TWO WALLS</div>
+            <div className="text-lg font-bold tracking-wide text-ink">NoGhost</div>
             <div className="text-[11px] uppercase tracking-widest text-ink-faint">Prepaid Token Authority</div>
           </div>
         </div>

@@ -58,7 +58,7 @@ export function TopBar({
             <span className="h-full w-[5px] rounded-sm bg-info" />
           </span>
           <div className="leading-tight">
-            <div className="text-[13px] font-bold tracking-wide text-ink">TWO WALLS</div>
+            <div className="text-[13px] font-bold tracking-wide text-ink">NoGhost</div>
             <div className="text-[10px] uppercase tracking-widest text-ink-faint">Prepaid Token Authority</div>
           </div>
         </div>
