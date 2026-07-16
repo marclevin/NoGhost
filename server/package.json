@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "setup:keys": "tsx src/scripts/setup-keys.ts",
+    "setup:xrpl": "tsx src/scripts/setup-xrpl.ts",
     "xrpl:smoke": "tsx src/scripts/xrpl-smoke.ts",
+    "chain:smoke": "tsx src/scripts/chain-smoke.ts",
     "bank": "tsx src/bank/index.ts",
     "signer:utility": "tsx src/signer/index.ts utility",
     "signer:city-a": "tsx src/signer/index.ts city-a",

@@ -11,7 +11,7 @@ import { ed25519 } from '@noble/curves/ed25519';
 import { canonicalBytes, bytesToHex, hexToBytes } from '../common/canonical.js';
 import { CURRENCY, priceZar } from '../common/config.js';
 import { buildTokenPayload } from '../common/token.js';
-import type { DebitConfirmation, Round2Request } from '../common/types.js';
+import type { DebitConfirmation, GenerationRequest, Round2Request } from '../common/types.js';
 
 export interface CheckFailure {
   status: number;
@@ -42,45 +42,58 @@ export function verifyBankSignature(debit: DebitConfirmation, bankPublicKeyHex: 
 }
 
 /**
- * Round-2 checks 3–6, in contract order, with the contract's exact error
- * codes and HTTP statuses. Returns null when everything verifies.
+ * Wall-1 debit validation (checks 3–4): the bank attestation verifies with the
+ * PINNED key, and the debit is FOR this request at the signer's own pricing.
+ * meterId + amountKwh are inside the signed payload (check 3), so matching them
+ * binds the request's economics to what the bank actually witnessed — not to
+ * fields the (untrusted) coordinator merely asserts. Used both at on-chain
+ * approval time (no token yet) and inside round-2.
  */
-export function runWall1TokenChecks(req: Round2Request, bankPublicKeyHex: string): CheckFailure | null {
+export function validateDebitForRequest(
+  request: GenerationRequest,
+  debit: DebitConfirmation,
+  bankPublicKeyHex: string,
+): CheckFailure | null {
   // 3. Wall 1: bank attestation verifies with the PINNED key (FR-8).
-  if (!verifyBankSignature(req.debit, bankPublicKeyHex)) {
+  if (!verifyBankSignature(debit, bankPublicKeyHex)) {
     return {
       status: 401,
-      body: {
-        error: 'WALL_1_UNVERIFIED',
-        detail: 'bank signature failed verification against the pinned bank public key',
-      },
+      body: { error: 'WALL_1_UNVERIFIED', detail: 'bank signature failed verification against the pinned bank public key' },
     };
   }
 
-  // 4. The bank-ATTESTED debit must be FOR this request: same requestId, same
-  //    target meter, same units, at the signer's OWN pricing, in ZAR. Because
-  //    meterId + amountKwh are now inside the signed payload (check 3), matching
-  //    them here binds the token's economics to what the bank actually witnessed
-  //    — not to fields the (untrusted) coordinator merely asserts.
+  // 4. Debit must be FOR this request: same requestId, same target meter, same
+  //    units, at the signer's OWN pricing, in ZAR.
   if (
-    req.debit.requestId !== req.request.requestId ||
-    req.debit.meterId !== req.request.meterId ||
-    req.debit.amountKwh !== req.request.amountKwh ||
-    req.debit.amount !== priceZar(req.request.amountKwh) ||
-    req.debit.currency !== CURRENCY
+    debit.requestId !== request.requestId ||
+    debit.meterId !== request.meterId ||
+    debit.amountKwh !== request.amountKwh ||
+    debit.amount !== priceZar(request.amountKwh) ||
+    debit.currency !== CURRENCY
   ) {
     return {
       status: 401,
       body: {
         error: 'WALL_1_MISMATCH',
         detail:
-          `debit {requestId: ${req.debit.requestId}, meterId: ${req.debit.meterId}, amountKwh: ${req.debit.amountKwh}, ` +
-          `amount: ${req.debit.amount} ${req.debit.currency}} does not match request ` +
-          `{requestId: ${req.request.requestId}, meterId: ${req.request.meterId}, amountKwh: ${req.request.amountKwh}, ` +
-          `expected: ${priceZar(req.request.amountKwh)} ${CURRENCY}}`,
+          `debit {requestId: ${debit.requestId}, meterId: ${debit.meterId}, amountKwh: ${debit.amountKwh}, ` +
+          `amount: ${debit.amount} ${debit.currency}} does not match request ` +
+          `{requestId: ${request.requestId}, meterId: ${request.meterId}, amountKwh: ${request.amountKwh}, ` +
+          `expected: ${priceZar(request.amountKwh)} ${CURRENCY}}`,
       },
     };
   }
+  return null;
+}
+
+/**
+ * Round-2 checks 3–6, in contract order, with the contract's exact error
+ * codes and HTTP statuses. Returns null when everything verifies.
+ */
+export function runWall1TokenChecks(req: Round2Request, bankPublicKeyHex: string): CheckFailure | null {
+  // 3–4. Wall 1 debit validation.
+  const debitFailure = validateDebitForRequest(req.request, req.debit, bankPublicKeyHex);
+  if (debitFailure) return debitFailure;
 
   // 5. FR-20 at Wall 2 — the token must be EXACTLY the one payload this debit
   //    authorises: buildTokenPayload(debit). This ties meterId/amountKwh/debitRef

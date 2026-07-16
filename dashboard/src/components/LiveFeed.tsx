@@ -1,5 +1,6 @@
 /** Panel A — Live Generation Feed: newest-first request cards with pipeline steppers. */
-import type { Merchant, PipelineRecord, Snapshot } from '../types';
+import clsx from 'clsx';
+import type { Merchant, OnChainApproval, PipelineRecord, Snapshot } from '../types';
 import { Stepper } from './Stepper';
 import {
   BoltIcon,
@@ -7,6 +8,7 @@ import {
   Chip,
   EmptyState,
   ExplorerLink,
+  LinkOutIcon,
   PanelTitle,
   Spinner,
   fmtTime,
@@ -35,6 +37,10 @@ function statusChip(rec: PipelineRecord): { tone: Tone; label: string; busy?: bo
       return { tone: 'info', label: 'AWAITING DEBIT', busy: true };
     case 'DEBIT_CONFIRMED':
       return { tone: 'info', label: 'IN CEREMONY', busy: true };
+    case 'PUBLISHED':
+      return { tone: 'ledger', label: 'PUBLISHED ON-CHAIN', busy: true };
+    case 'APPROVED':
+      return { tone: 'ledger', label: 'ON-CHAIN QUORUM MET', busy: true };
     case 'SIGNED':
       return { tone: 'ledger', label: 'WRITING TO LEDGER', busy: true };
     case 'RECORDED':
@@ -46,6 +52,30 @@ function statusChip(rec: PipelineRecord): { tone: Tone; label: string; busy?: bo
 
 function merchantName(merchants: Merchant[], id: string): string {
   return merchants.find((m) => m.merchantId === id)?.name ?? id;
+}
+
+/** One consortium member's independent on-chain APPROVE/REJECT attestation (its own XRPL wallet). */
+function ApprovalChip({ a }: { a: OnChainApproval }) {
+  const approve = a.verdict === 'APPROVE';
+  return (
+    <a
+      href={a.explorerUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={`${a.signerId} · ${a.verdict}${a.reason ? ` — ${a.reason}` : ''} · ${a.fromAddress}`}
+      className={clsx(
+        'group inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium leading-4 transition',
+        approve ? 'border-ok/30 bg-ok/12 hover:bg-ok/20' : 'border-bad/30 bg-bad/12 hover:bg-bad/20',
+      )}
+    >
+      <span className="font-semibold text-ink">{a.signerId}</span>
+      <span className={approve ? 'font-bold text-ok-soft' : 'font-bold text-bad-soft'}>
+        {approve ? 'APPROVE' : 'REJECT'}
+      </span>
+      {!approve && a.reason && <span className="text-ink-muted">· {a.reason}</span>}
+      <LinkOutIcon className="h-3 w-3 text-ledger opacity-70 transition group-hover:opacity-100" />
+    </a>
+  );
 }
 
 function RequestCard({ rec, merchants }: { rec: PipelineRecord; merchants: Merchant[] }) {
@@ -95,6 +125,40 @@ function RequestCard({ rec, merchants }: { rec: PipelineRecord; merchants: Merch
           </div>
         )}
 
+        {(rec.publication || (rec.approvals && rec.approvals.length > 0)) && (
+          <div className="mt-3 flex flex-col gap-2 rounded-lg border border-ledger/25 bg-ledger/6 px-3 py-2">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[12px]">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-ledger">On-chain consensus</span>
+              {rec.publication && (
+                <>
+                  <a
+                    href={rec.publication.explorerUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 font-medium text-ledger transition hover:text-white"
+                  >
+                    Request on-chain
+                    <LinkOutIcon className="h-3.5 w-3.5" />
+                  </a>
+                  <code
+                    className="tnum font-mono text-[11px] text-ink-faint"
+                    title={rec.publication.requestTxHash}
+                  >
+                    {truncMiddle(rec.publication.requestTxHash, 6, 4)}
+                  </code>
+                </>
+              )}
+            </div>
+            {rec.approvals && rec.approvals.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                {rec.approvals.map((a) => (
+                  <ApprovalChip key={a.signerId} a={a} />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {rec.status === 'DELIVERED' && rec.token && (
           <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-lg border border-ok/25 bg-ok/8 px-3 py-2 text-[12px]">
             <span className="text-ink-muted">
@@ -113,7 +177,12 @@ function RequestCard({ rec, merchants }: { rec: PipelineRecord; merchants: Merch
                 Dispensed <span className="font-medium text-ink">{rec.meterDelivery.dispensedKwh} kWh</span>
               </span>
             )}
-            {rec.ledger && <ExplorerLink url={rec.ledger.explorerUrl} />}
+            {rec.ledger && (
+              <ExplorerLink
+                url={rec.ledger.explorerUrl}
+                label={rec.ledger.multisign ? '2-of-3 multisign receipt' : 'View on XRPL'}
+              />
+            )}
           </div>
         )}
       </div>

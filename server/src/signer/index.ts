@@ -12,11 +12,19 @@ import express from 'express';
 import cors from 'cors';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { KEYS_DIR, SIGNERS } from '../common/config.js';
-import { hexToBytes } from '../common/canonical.js';
+import type { Wallet, SubmittableTransaction } from 'xrpl';
+import { KEYS_DIR, SIGNERS, XRPL_MULTISIGN_QUORUM } from '../common/config.js';
+import { hexToBytes, hashValue } from '../common/canonical.js';
 import { round1, round2Sign } from '../frost/frost.js';
-import type { Round1Response, Round2Request, Round2Response, SignerHealth, SignerId } from '../common/types.js';
-import { runWall1TokenChecks } from './verify.js';
+import {
+  loadMemberWallet,
+  readRequestTx,
+  postApproval,
+  readApprovals,
+  signReceiptFragment,
+} from '../common/chain.js';
+import type { DebitConfirmation, GenerationRequest, Round1Response, Round2Request, Round2Response, SignerHealth, SignerId } from '../common/types.js';
+import { runWall1TokenChecks, validateDebitForRequest } from './verify.js';
 
 // --- identity ----------------------------------------------------------------
 const signerId = process.argv[2] as SignerId | undefined;
@@ -52,6 +60,16 @@ try {
 } catch (e) {
   log('bank_pubkey.load_failed', { err: String(e) });
 }
+
+/** This member's own XRPL wallet (posts approvals + signs receipt fragments). */
+let xrplWallet: Wallet | null = null;
+try {
+  xrplWallet = loadMemberWallet(info.signerId);
+} catch (e) {
+  log('xrpl_wallet.load_failed', { err: String(e) });
+}
+/** requestHashes this member has already endorsed on-chain (idempotent approvals). */
+const approvedOnChain = new Map<string, { verdict: 'APPROVE' | 'REJECT'; txHash: string }>();
 
 // --- state --------------------------------------------------------------------
 let online = true; // demo toggle
@@ -93,6 +111,7 @@ app.get('/api/health', (_req, res) => {
     refuse,
     lastPartialAt,
     revoked: false, // governance overlay is the coordinator's job
+    ...(xrplWallet ? { xrplAddress: xrplWallet.address } : {}),
   };
   res.json(health);
 });
@@ -143,8 +162,109 @@ app.post('/api/ceremony/round1', (req, res) => {
   res.json(response);
 });
 
+// --- on-chain consensus: read request from chain, validate, post own approval -
+// The member does NOT trust the coordinator's word: it reads the encrypted
+// request from the ledger, decrypts it, verifies the bank attestation itself,
+// and posts its OWN signed APPROVE/REJECT transaction from its OWN XRPL account.
+app.post('/api/consensus/validate', async (req, res) => {
+  if (!online) {
+    res.status(503).json({ error: 'signer offline' });
+    return;
+  }
+  if (!share || !pinnedBankPublicKey || !xrplWallet) {
+    res.status(503).json({ error: 'signer keys unavailable' });
+    return;
+  }
+  const requestTxHash = (req.body as { requestTxHash?: unknown } | undefined)?.requestTxHash;
+  if (typeof requestTxHash !== 'string' || requestTxHash.length === 0) {
+    res.status(400).json({ error: 'requestTxHash required' });
+    return;
+  }
+  try {
+    const read = await readRequestTx<{ request: GenerationRequest; debit: DebitConfirmation }>(requestTxHash);
+    if (!read) {
+      res.status(400).json({ error: 'REQUEST_NOT_ON_CHAIN' });
+      return;
+    }
+    const { requestHash, payload } = read;
+
+    // idempotent — never post two attestations for one request
+    const prior = approvedOnChain.get(requestHash);
+    if (prior) {
+      res.json({ signerId: info.signerId, verdict: prior.verdict, txHash: prior.txHash, requestHash, cached: true });
+      return;
+    }
+
+    // independent validation: on-chain id binds the request; FR-9 refusal; Wall-1 debit checks
+    let verdict: 'APPROVE' | 'REJECT' = 'APPROVE';
+    let reason: string | undefined;
+    if (hashValue(payload.request) !== requestHash) {
+      verdict = 'REJECT';
+      reason = 'REQUEST_HASH_MISMATCH';
+    } else if (refuse) {
+      verdict = 'REJECT';
+      reason = `GOVERNANCE_REFUSAL${refuseReason ? `: ${refuseReason}` : ''}`;
+    } else {
+      const failure = validateDebitForRequest(payload.request, payload.debit, pinnedBankPublicKey);
+      if (failure) {
+        verdict = 'REJECT';
+        reason = failure.body.error;
+      }
+    }
+
+    const { txHash } = await postApproval(xrplWallet, info.signerId, requestHash, verdict, reason);
+    approvedOnChain.set(requestHash, { verdict, txHash });
+    log('consensus.attested', { requestHash, verdict, reason, txHash });
+    res.json({ signerId: info.signerId, verdict, reason, txHash, requestHash });
+  } catch (e) {
+    log('consensus.validate_error', { err: String((e as Error)?.message ?? e) });
+    res.status(500).json({ error: 'validate failed', detail: String((e as Error)?.message ?? e) });
+  }
+});
+
+/** Count on-chain APPROVE attestations for a request, with brief retry for ledger propagation. */
+async function onChainApproveCount(requestHash: string): Promise<number> {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const approvals = await readApprovals(requestHash);
+    const n = approvals.filter((a) => a.verdict === 'APPROVE').length;
+    if (n >= XRPL_MULTISIGN_QUORUM || attempt === 3) return n;
+    await new Promise((r) => setTimeout(r, 1500));
+  }
+  return 0;
+}
+
+// --- on-chain multisign receipt: co-sign a fragment (2-of-3) ------------------
+app.post('/api/consensus/sign-receipt', async (req, res) => {
+  if (!online) {
+    res.status(503).json({ error: 'signer offline' });
+    return;
+  }
+  if (!xrplWallet) {
+    res.status(503).json({ error: 'signer XRPL key unavailable' });
+    return;
+  }
+  const body = req.body as { prepared?: SubmittableTransaction; requestHash?: unknown } | undefined;
+  if (!body?.prepared || typeof body.requestHash !== 'string') {
+    res.status(400).json({ error: 'prepared tx and requestHash required' });
+    return;
+  }
+  // a member only co-signs a receipt for a request that reached on-chain quorum
+  const approveCount = await onChainApproveCount(body.requestHash);
+  if (approveCount < XRPL_MULTISIGN_QUORUM) {
+    res.status(409).json({ error: 'NO_ONCHAIN_QUORUM', approveCount });
+    return;
+  }
+  try {
+    const fragment = signReceiptFragment(xrplWallet, body.prepared);
+    log('consensus.receipt_signed', { requestHash: body.requestHash });
+    res.json({ signerId: info.signerId, fragment });
+  } catch (e) {
+    res.status(500).json({ error: 'fragment signing failed', detail: String((e as Error)?.message ?? e) });
+  }
+});
+
 // --- ceremony round 2: verify EVERYTHING, then sign ---------------------------
-app.post('/api/ceremony/round2', (req, res) => {
+app.post('/api/ceremony/round2', async (req, res) => {
   if (!online) {
     res.status(503).json({ error: 'signer offline' });
     return;
@@ -197,6 +317,19 @@ app.post('/api/ceremony/round2', (req, res) => {
     sessions.delete(sessionId);
     log('round2.check_failed', { sessionId, error: failure.body.error, detail: failure.body.detail });
     res.status(failure.status).json(failure.body);
+    return;
+  }
+
+  // 6.5. LOAD-BEARING on-chain gate — the FROST partial is withheld unless an
+  //      independent quorum of members has posted APPROVE attestations on-chain.
+  //      This ties Wall 2 to the ledger: a compromised coordinator cannot induce
+  //      signing without a genuine, publicly-visible consortium approval.
+  const requestHash = hashValue((body as Round2Request).request);
+  const approveCount = await onChainApproveCount(requestHash);
+  if (approveCount < XRPL_MULTISIGN_QUORUM) {
+    sessions.delete(sessionId);
+    log('round2.no_onchain_quorum', { sessionId, requestHash, approveCount });
+    res.status(409).json({ error: 'NO_ONCHAIN_QUORUM', detail: `only ${approveCount} on-chain approvals; need ${XRPL_MULTISIGN_QUORUM}` });
     return;
   }
 

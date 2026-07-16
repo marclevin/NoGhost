@@ -1,17 +1,39 @@
-# Two Walls — Stopping Insider Fraud in Prepaid Electricity Tokens
+# NoGhost — Stopping Insider Fraud in Prepaid Electricity Tokens
 
 A working proof-of-concept (UZH course project) that makes **systemic ghost-vending impossible by
 construction**: a prepaid electricity token cannot come into existence unless **(1)** a bank has
 witnessed a real debit (*Wall 1*) **and** **(2)** an independent 2-of-3 consortium quorum has jointly
-signed it with a threshold key that no single party holds (*Wall 2*). Every authorisation is witnessed
-immutably on the **XRPL testnet**.
+approved and signed it (*Wall 2*) — with the whole consensus carried out **on the XRPL testnet** using
+only native ledger primitives (no smart contracts).
 
 Docs: [FRD.md](FRD.md) (functional spec) · [noghost.md](noghost.md) (vision) · [SECURITY.md](SECURITY.md) (threat model + adversarial review) · [CONTRACTS.md](CONTRACTS.md) (service contracts).
 
+## On-chain consortium consensus
+
+Every consortium member (Utility, City A, City B) is its own **XRPL account**. A generation request runs
+this pipeline, with three distinct on-chain interactions:
+
+```
+request → bank debit (Wall 1)
+        → PUBLISH request ENCRYPTED on-chain            (XRPL tx #1, AES-256-GCM, hashes + ciphertext only)
+        → each member READS it from chain, validates,
+          and posts its own APPROVE/REJECT attestation  (XRPL tx #2,3,4 — one per member, own wallet)
+        → FROST 2-of-3 threshold signature              (off-chain, GATED on the on-chain approval quorum)
+        → 2-of-3 MULTISIGN receipt                      (XRPL tx #5, on an authority account whose master
+                                                          key is DISABLED — validators enforce the quorum)
+        → simulated meter verifies + dispenses
+```
+
+Two independent guarantees stack:
+- **Wall 2 approval consensus** — the FROST ceremony will not proceed unless a quorum of members has
+  posted APPROVE attestations *on the ledger*; a compromised coordinator cannot fake that.
+- **Native XRPL multisign** — the receipt transaction is co-signed by 2 of the 3 member accounts, and the
+  authority account's master key is disabled, so **no single party — not even the coordinator — can emit a
+  receipt alone.** No Solidity, no EVM sidechain: pure XRPL SignerList + multisign + memos.
+
 > **Security note.** "One debit, one token" (FR-20) is enforced at **Wall 2**, not by the coordinator: the token is a
 > deterministic function of the bank-signed debit (`nonce = H(debitRef)`, and the bank attests `meterId`/`amountKwh`),
-> so each signer independently refuses to sign anything but the one token a debit authorises. A compromised
-> coordinator therefore cannot replay one paid debit into multiple tokens. See [SECURITY.md](SECURITY.md).
+> so each signer independently refuses to sign anything but the one token a debit authorises. See [SECURITY.md](SECURITY.md).
 
 ## Architecture
 
@@ -34,7 +56,10 @@ simplification, FRD §9); the group secret is discarded at dealing time and **ne
 
 ```bash
 npm install
-npm run setup          # one-time key ceremony → server/keys/ (FROST shares + bank keypair)
+npm run setup          # one-time ceremony → server/keys/: FROST shares + bank keypair, AND
+                       #   the on-chain consortium (funds 3 member accounts + an authority
+                       #   account on XRPL testnet, sets a 2-of-3 SignerList, disables the
+                       #   authority master key). Requires network access to the testnet faucet.
 npm run dev            # bank + 3 signers + coordinator + dashboard, all at once
 ```
 

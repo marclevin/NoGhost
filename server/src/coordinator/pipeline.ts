@@ -13,15 +13,19 @@
  */
 import { bytesToHex, canonicalBytes, hashValue, hexToBytes, sha256Hex } from '../common/canonical.js';
 import { ed25519 } from '@noble/curves/ed25519';
-import { BANK_URL, CURRENCY, SIGNERS, THRESHOLD, priceZar, signerUrl, type SignerInfo } from '../common/config.js';
+import { Wallet } from 'xrpl';
+import { BANK_URL, CURRENCY, SIGNERS, THRESHOLD, XRP_WALLET_SECRET, XRPL_MULTISIGN_QUORUM, XRPL_EXPLORER_TX, priceZar, signerUrl, type SignerInfo } from '../common/config.js';
 import { buildTokenPayload } from '../common/token.js';
+import { publishRequest, readApprovals, prepareReceipt, submitReceipt, type ReceiptFields } from '../common/chain.js';
 import { aggregate, verifySignature, verifySignatureShare, type Commitment } from '../frost/frost.js';
 import type {
   DebitConfirmation,
   DebitRequest,
   DebitSignedPayload,
   LedgerRecord,
+  OnChainApproval,
   PipelineRecord,
+  Publication,
   Round2Request,
   SignerId,
   Token,
@@ -31,7 +35,9 @@ import type {
 import { tryFetchJson } from './http.js';
 import { deliverToken, verifyTokenForMeter } from './meter.js';
 import * as store from './store.js';
-import { submitAuthorisation } from './xrpl.js';
+
+/** The coordinator's own XRPL account — publishes the encrypted request on-chain. */
+const publisherWallet = XRP_WALLET_SECRET ? Wallet.fromSeed(XRP_WALLET_SECRET) : null;
 
 const now = () => new Date().toISOString();
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -191,6 +197,71 @@ async function runCeremony(
 }
 
 // ---------------------------------------------------------------------------
+// on-chain consensus helpers (publish → approvals → multisign receipt)
+// ---------------------------------------------------------------------------
+
+/** Publish the request+debit ENCRYPTED on-chain; the hash is its public id. */
+async function publishOnChain(record: PipelineRecord): Promise<Publication> {
+  if (!publisherWallet) throw new Error('coordinator XRPL publisher wallet unavailable');
+  const requestHash = hashValue(record.request);
+  const pub = await publishRequest(publisherWallet, requestHash, { request: record.request, debit: record.debit });
+  return { requestHash, requestTxHash: pub.txHash, explorerUrl: XRPL_EXPLORER_TX(pub.txHash) };
+}
+
+/** Ask each online member to independently read+validate the on-chain request and
+ *  post its own approval; then read the authoritative approval set back off-chain. */
+async function gatherApprovals(record: PipelineRecord, online: SignerInfo[]): Promise<{ approvals: OnChainApproval[]; approveCount: number }> {
+  const { requestHash, requestTxHash } = record.publication!;
+  await Promise.all(
+    online.map((s) =>
+      tryFetchJson(`${signerUrl(s)}/api/consensus/validate`, { method: 'POST', body: JSON.stringify({ requestTxHash }) }, 20_000),
+    ),
+  );
+  const onchain = await readApprovals(requestHash);
+  const approvals: OnChainApproval[] = onchain.map((a) => ({ ...a, explorerUrl: XRPL_EXPLORER_TX(a.txHash) }));
+  record.approvals = approvals;
+  return { approvals, approveCount: approvals.filter((a) => a.verdict === 'APPROVE').length };
+}
+
+/** Build one receipt tx, have the signerSet members co-sign fragments, submit the 2-of-3 multisign. */
+async function multisignReceipt(record: PipelineRecord): Promise<LedgerRecord> {
+  const fields: ReceiptFields = {
+    requestHash: record.publication!.requestHash,
+    debitRefHash: sha256Hex(record.debit!.debitRef),
+    tokenHash: hashValue(record.token),
+    signerSet: record.signerSet!,
+    ts: now(),
+  };
+  const prepared = await prepareReceipt(fields);
+  const fragments: string[] = [];
+  for (const sid of record.signerSet!) {
+    const s = SIGNERS.find((x) => x.signerId === sid)!;
+    const r = await tryFetchJson(
+      `${signerUrl(s)}/api/consensus/sign-receipt`,
+      { method: 'POST', body: JSON.stringify({ prepared, requestHash: fields.requestHash }) },
+      20_000,
+    );
+    if (!r?.ok || typeof r.body?.fragment !== 'string') {
+      throw new Error(`RECEIPT_FRAGMENT_FAILED (${sid}: ${r ? `${r.status}${r.body?.error ? ` ${r.body.error}` : ''}` : 'unreachable'})`);
+    }
+    fragments.push(r.body.fragment as string);
+  }
+  const submitted = await submitReceipt(fragments);
+  return {
+    requestHash: fields.requestHash,
+    debitRefHash: fields.debitRefHash,
+    tokenHash: fields.tokenHash,
+    signerSet: fields.signerSet,
+    timestamp: fields.ts,
+    txHash: submitted.txHash,
+    ...(submitted.ledgerIndex !== undefined ? { ledgerIndex: submitted.ledgerIndex } : {}),
+    explorerUrl: submitted.explorerUrl,
+    multisign: true,
+    requestTxHash: record.publication!.requestTxHash,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // the pipeline
 // ---------------------------------------------------------------------------
 
@@ -327,7 +398,47 @@ export async function runPipeline(record: PipelineRecord): Promise<void> {
     }
     store.transition(record, 'DEBIT_CONFIRMED', `debitRef ${debit.debitRef} — R${debit.amount} confirmed & verified`);
 
-    // ---- 4. Wall 2 — FROST threshold ceremony -----------------------------
+    // ---- 4. publish the request ENCRYPTED on-chain ------------------------
+    stage = 'LEDGER';
+    try {
+      record.publication = await publishOnChain(record);
+    } catch (e) {
+      return await abandon(record, 'LEDGER', `PUBLISH_FAILED: ${errMsg(e)}`, 'xrpl-testnet');
+    }
+    store.transition(record, 'PUBLISHED', `request on-chain (encrypted): ${record.publication.requestTxHash}`);
+
+    // ---- 5. members read+validate on-chain and post independent approvals --
+    stage = 'WALL_2_CONSORTIUM';
+    const approvers = await pollOnlineActiveSigners();
+    if (approvers.length < THRESHOLD.t) {
+      return await abandon(
+        record,
+        'WALL_2_CONSORTIUM',
+        `BELOW_THRESHOLD (${approvers.length} of ${SIGNERS.length} signers available, need ${THRESHOLD.t})`,
+        'consortium',
+      );
+    }
+    const { approvals, approveCount } = await gatherApprovals(record, approvers);
+    if (approveCount < XRPL_MULTISIGN_QUORUM) {
+      const rejections = approvals.filter((a) => a.verdict === 'REJECT');
+      store.addAlert({
+        severity: 'critical',
+        wall: 'WALL_2_CONSORTIUM',
+        requestId,
+        title: 'On-chain approval short of quorum',
+        message: `${approveCount}/${XRPL_MULTISIGN_QUORUM} members approved on-chain${rejections.length ? `; rejected by ${rejections.map((r) => `${r.signerId}(${r.reason ?? '?'})`).join(', ')}` : ''}. No token generated.`,
+        attribution: rejections.map((r) => r.signerId).join(', ') || 'consortium',
+      });
+      return await abandon(
+        record,
+        'WALL_2_CONSORTIUM',
+        `ONCHAIN_APPROVAL_SHORT (${approveCount}/${XRPL_MULTISIGN_QUORUM})`,
+        rejections.map((r) => r.signerId).join(', ') || 'consortium',
+      );
+    }
+    store.transition(record, 'APPROVED', `on-chain approvals: ${approvals.filter((a) => a.verdict === 'APPROVE').map((a) => a.signerId).join(' + ')}`);
+
+    // ---- 6. Wall 2 — FROST threshold ceremony (gated on on-chain quorum) ---
     stage = 'WALL_2_CONSORTIUM';
     const online = await pollOnlineActiveSigners();
 
@@ -416,24 +527,22 @@ export async function runPipeline(record: PipelineRecord): Promise<void> {
       return await abandon(record, 'WALL_2_CONSORTIUM', preMeter.reason, `meter ${meterId}`);
     }
 
-    // ---- 6. ledger — XRPL immutable witness --------------------------------
+    // ---- 8. multisigned receipt (2-of-3 on the authority account) ----------
+    // The signerSet members co-sign one XRPL transaction; the ledger's own
+    // validators enforce the 2-of-3 quorum (the authority's master key is
+    // disabled). No single party — not even the coordinator — can emit it.
     stage = 'LEDGER';
     let ledger: LedgerRecord;
     try {
-      ledger = await submitAuthorisation({
-        requestHash: hashValue(record.request),
-        debitRefHash: sha256Hex(debit.debitRef),
-        tokenHash: hashValue(token),
-        signerSet,
-      });
+      ledger = await multisignReceipt(record);
     } catch (e) {
-      return await abandon(record, 'LEDGER', `XRPL_SUBMIT_FAILED: ${errMsg(e)}`, 'xrpl-testnet');
+      return await abandon(record, 'LEDGER', `RECEIPT_MULTISIGN_FAILED: ${errMsg(e)}`, 'consortium');
     }
     record.ledger = ledger;
     store.addAudit(ledger);
-    store.transition(record, 'RECORDED', `tx ${ledger.txHash}`);
+    store.transition(record, 'RECORDED', `2-of-3 multisign receipt: ${ledger.txHash}`);
 
-    // ---- 7. meter delivery — closes the loop -------------------------------
+    // ---- 9. meter delivery — closes the loop -------------------------------
     // Pre-verified above, so this commit cannot fail in honest operation.
     const delivery = deliverToken(token);
     if (!delivery.ok) {

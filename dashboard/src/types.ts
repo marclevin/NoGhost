@@ -6,8 +6,10 @@
 export type RequestStatus =
   | 'PENDING'
   | 'DEBIT_CONFIRMED'
+  | 'PUBLISHED' // request published on-chain (encrypted)
+  | 'APPROVED' // >= quorum members posted on-chain approvals
   | 'SIGNED'
-  | 'RECORDED'
+  | 'RECORDED' // multisigned receipt on-chain
   | 'DELIVERED'
   | 'REJECTED'
   | 'REJECTED_ABANDONED';
@@ -56,6 +58,25 @@ export interface LedgerRecord {
   txHash: string;
   ledgerIndex?: number;
   explorerUrl: string;
+  multisign?: boolean; // true when the receipt was a 2-of-3 XRPL multisign
+  requestTxHash?: string; // links the receipt back to the on-chain request
+}
+
+/** A member's independent on-chain endorsement of a request (each from its own XRPL wallet). */
+export interface OnChainApproval {
+  signerId: SignerId;
+  verdict: 'APPROVE' | 'REJECT';
+  reason?: string;
+  txHash: string;
+  fromAddress: string;
+  explorerUrl: string;
+}
+
+/** The encrypted request published on-chain (hash is the public identifier). */
+export interface Publication {
+  requestHash: string;
+  requestTxHash: string;
+  explorerUrl: string;
 }
 
 export interface Rejection {
@@ -78,9 +99,11 @@ export interface PipelineRecord {
   history: StatusTransition[];
   debit?: DebitConfirmation;
   debitReversed?: boolean; // FR-21
+  publication?: Publication; // on-chain encrypted request
+  approvals?: OnChainApproval[]; // members' on-chain endorsements
   signerSet?: SignerId[];
   token?: Token;
-  ledger?: LedgerRecord;
+  ledger?: LedgerRecord; // the 2-of-3 multisigned receipt
   rejection?: Rejection;
   meterDelivery?: { verified: boolean; dispensedKwh: number; at: string };
 }
@@ -97,6 +120,7 @@ export interface SignerHealth {
   refuse: boolean;
   lastPartialAt: string | null;
   revoked: boolean;
+  xrplAddress?: string; // this member's own on-chain account
 }
 
 export interface ConsortiumMember {
@@ -158,11 +182,20 @@ export interface BankStatus {
   lastConfirmationAt: string | null;
 }
 
+export interface ConsortiumChain {
+  authority: string;
+  authorityExplorerUrl: string;
+  quorum: number;
+  masterKeyDisabled: boolean;
+  members: Partial<Record<SignerId, { address: string; explorerUrl: string }>>;
+}
+
 export interface ConsortiumStatus {
   threshold: { t: number; n: number };
   groupPublicKey: string;
   signers: SignerHealth[];
   quorumReachable: boolean;
+  chain?: ConsortiumChain; // on-chain consortium (authority + member accounts)
 }
 
 export interface MeterState {

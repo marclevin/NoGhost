@@ -1,7 +1,7 @@
 /** Panel B — Two Walls Status: bank tile + consortium tile with per-signer health chips. */
 import clsx from 'clsx';
 import type { BankMode, SignerHealth, Snapshot } from '../types';
-import { ago, BankIcon, Card, Chip, Dot, PanelTitle, ShieldIcon, truncMiddle } from './ui';
+import { ago, BankIcon, Card, Chip, Dot, LinkOutIcon, PanelTitle, ShieldIcon, truncMiddle } from './ui';
 
 const MODE_INFO: Record<BankMode, { label: string; tone: 'ok' | 'bad' | 'warn'; note: string }> = {
   CONFIRM: { label: 'CONFIRM', tone: 'ok', note: 'Debits confirmed and signed — normal operation.' },
@@ -10,7 +10,7 @@ const MODE_INFO: Record<BankMode, { label: string; tone: 'ok' | 'bad' | 'warn'; 
   TIMEOUT: { label: 'TIMEOUT', tone: 'warn', note: 'Bank unresponsive — debits time out.' },
 };
 
-function SignerChip({ s }: { s: SignerHealth }) {
+function SignerChip({ s, explorerUrl }: { s: SignerHealth; explorerUrl?: string }) {
   const tone = s.revoked ? 'bad' : s.online ? 'ok' : 'muted';
   return (
     <div
@@ -31,6 +31,25 @@ function SignerChip({ s }: { s: SignerHealth }) {
         {s.refuse && <Chip tone="warn">refusing</Chip>}
       </div>
       <span className="tnum text-[11px] text-ink-faint">last partial: {ago(s.lastPartialAt)}</span>
+      {s.xrplAddress && (
+        <span className="flex items-center gap-1.5 border-t border-edge/60 pt-1.5 text-[11px]">
+          <span className="text-ink-faint">on-chain</span>
+          <code className="tnum font-mono text-ledger" title={s.xrplAddress}>
+            {truncMiddle(s.xrplAddress, 6, 4)}
+          </code>
+          {explorerUrl && (
+            <a
+              href={explorerUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="View account on XRPL"
+              className="text-ledger transition hover:text-white"
+            >
+              <LinkOutIcon className="h-3 w-3" />
+            </a>
+          )}
+        </span>
+      )}
     </div>
   );
 }
@@ -97,7 +116,7 @@ export function WallsPanel({ snap }: { snap: Snapshot }) {
           </div>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             {consortium.signers.map((s) => (
-              <SignerChip key={s.signerId} s={s} />
+              <SignerChip key={s.signerId} s={s} explorerUrl={consortium.chain?.members[s.signerId]?.explorerUrl} />
             ))}
           </div>
           {wall2Blocked && (

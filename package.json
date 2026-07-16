@@ -9,7 +9,7 @@
     "dashboard"
   ],
   "scripts": {
-    "setup": "npm run setup:keys -w server",
+    "setup": "npm run setup:keys -w server && npm run setup:xrpl -w server",
     "test": "npm run test -w server",
     "typecheck": "npm run typecheck -w server && npm run typecheck -w dashboard",
     "bank": "npm -w server run bank",

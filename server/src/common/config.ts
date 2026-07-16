@@ -52,3 +52,12 @@ export const XRPL_WSS = process.env.XRPL_WSS ?? 'wss://s.altnet.rippletest.net:5
 export const XRP_WALLET_ADDRESS = process.env.XRP_WALLET_ADDRESS ?? '';
 export const XRP_WALLET_SECRET = process.env.XRP_WALLET_SECRET ?? '';
 export const XRPL_EXPLORER_TX = (hash: string) => `https://testnet.xrpl.org/transactions/${hash}`;
+export const XRPL_EXPLORER_ACCOUNT = (addr: string) => `https://testnet.xrpl.org/accounts/${addr}`;
+
+/** On-chain consortium threshold — matches the FROST threshold (2-of-3). */
+export const XRPL_MULTISIGN_QUORUM = THRESHOLD.t;
+
+// Consortium on-chain key material (created by scripts/setup-xrpl.ts).
+export const CONSORTIUM_MANIFEST = resolve(KEYS_DIR, 'xrpl-consortium.json');
+export const CONSORTIUM_ENC_KEY_FILE = resolve(KEYS_DIR, 'consortium-enc.json');
+export const xrplMemberKeyFile = (signerId: SignerId) => resolve(KEYS_DIR, `xrpl-member-${signerId}.json`);

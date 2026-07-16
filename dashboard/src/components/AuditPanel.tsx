@@ -58,6 +58,7 @@ export function AuditPanel({ snap }: { snap: Snapshot }) {
                             {s}
                           </Chip>
                         ))}
+                        {rec.multisign && <Chip tone="ledger">2-of-3 multisign</Chip>}
                       </span>
                     </td>
                     <td className="tnum px-4 py-2.5 text-ink-muted">{rec.ledgerIndex ?? '—'}</td>

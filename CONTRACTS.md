@@ -182,3 +182,27 @@ the independent walls (see [SECURITY.md](SECURITY.md)):
 6. **FR-14 anti-spam**: per-merchant sliding-window rate limit on `POST /api/requests` (20 / 10 s → `429 RATE_LIMITED`).
 7. **Dashboard**: dropped the redundant reconnect fetch that could revert fresher WS state; alert badge tracks unseen
    by id (works past the 100-alert cap); demo outcome label says `ABANDONED …` for `REJECTED_ABANDONED`.
+
+---
+
+## On-chain consensus redesign (supersedes §3.2 single-wallet receipt)
+
+The XRPL role was expanded from a single-wallet notary into a full consortium-consensus substrate (native
+primitives only, no smart contracts). Setup: `npm run setup:xrpl -w server` funds 3 member accounts + an
+authority account, sets a 2-of-3 SignerList, and disables the authority master key. Primitives:
+[server/src/common/chain.ts](server/src/common/chain.ts). Full write-up: [SECURITY.md](SECURITY.md).
+
+New pipeline stages (types.ts `RequestStatus`): `… DEBIT_CONFIRMED → PUBLISHED → APPROVED → SIGNED → RECORDED → DELIVERED`.
+
+- **PUBLISHED** — coordinator publishes `{request, debit}` **encrypted** (AES-256-GCM, gzip, one memo) to the
+  authority account. `PipelineRecord.publication = { requestHash, requestTxHash, explorerUrl }`.
+- **APPROVED** — coordinator calls each online member `POST /api/consensus/validate { requestTxHash }`; each
+  member reads the request from chain, decrypts, validates the bank attestation, and posts its own on-chain
+  `APPROVE`/`REJECT` (own wallet). `PipelineRecord.approvals: OnChainApproval[]`. Needs ≥ quorum APPROVE.
+- **SIGNED** — FROST `round2` now also gates on reading ≥ quorum on-chain `APPROVE` (`409 NO_ONCHAIN_QUORUM` else).
+- **RECORDED** — receipt is a native XRPL **2-of-3 multisign** on the authority account: coordinator calls
+  `POST /api/consensus/sign-receipt { prepared, requestHash }` on the signerSet members, combines fragments,
+  submits. `LedgerRecord.multisign = true`. The coordinator never holds the authority secret.
+
+New signer endpoints: `POST /api/consensus/validate`, `POST /api/consensus/sign-receipt`. New consortium
+status field: `ConsortiumStatus.chain` (authority + member addresses + quorum + masterKeyDisabled).

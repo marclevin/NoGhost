@@ -3,7 +3,7 @@ import { useState } from 'react';
 import clsx from 'clsx';
 import { api } from '../api';
 import type { Snapshot, SignerId } from '../types';
-import { Card, Chip, Dot, PanelTitle, Spinner, fmtDateTime, fmtZar } from './ui';
+import { Card, Chip, Dot, ExplorerLink, PanelTitle, ShieldIcon, Spinner, fmtDateTime, fmtZar, truncMiddle } from './ui';
 
 function ActionButton({
   label,
@@ -37,6 +37,7 @@ function ActionButton({
 }
 
 export function GovernancePanel({ snap }: { snap: Snapshot }) {
+  const chain = snap.consortium.chain;
   return (
     <section>
       <PanelTitle
@@ -48,6 +49,46 @@ export function GovernancePanel({ snap }: { snap: Snapshot }) {
           </Chip>
         }
       />
+
+      {/* On-chain consortium */}
+      {chain && (
+        <Card className="mb-4 border-ledger/30 p-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <ShieldIcon className="h-4 w-4 text-ledger" />
+            <h3 className="text-[13px] font-semibold text-ink">On-chain consortium</h3>
+            <Chip tone="ledger">{chain.quorum}-of-{snap.consortium.threshold.n} multisign</Chip>
+            {chain.masterKeyDisabled && <Chip tone="ok">master key DISABLED</Chip>}
+          </div>
+          <p className="mt-1 text-[12px] text-ink-muted">
+            Each member is its own on-chain account; receipts require {chain.quorum}-of-{snap.consortium.threshold.n} — no smart contract.
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border border-ledger/20 bg-ledger/6 px-3 py-2 text-[12px]">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-ledger">Authority account</span>
+            <code className="tnum font-mono text-ink" title={chain.authority}>
+              {truncMiddle(chain.authority, 8, 6)}
+            </code>
+            <ExplorerLink url={chain.authorityExplorerUrl} label="explorer" />
+          </div>
+          <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+            {snap.consortium.signers.map((s) => {
+              const m = chain.members[s.signerId];
+              if (!m) return null;
+              return (
+                <div key={s.signerId} className="rounded-lg border border-edge bg-white/4 px-3 py-2">
+                  <div className="text-[13px] font-semibold text-ink">{s.name}</div>
+                  <div className="text-[11px] text-ink-faint">{s.org}</div>
+                  <div className="mt-1.5 flex items-center gap-1.5">
+                    <code className="tnum font-mono text-[11px] text-ledger" title={m.address}>
+                      {truncMiddle(m.address, 6, 4)}
+                    </code>
+                    <ExplorerLink url={m.explorerUrl} label="explorer" />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
 
       {/* Members */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">

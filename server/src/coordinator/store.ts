@@ -6,11 +6,13 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { KEYS_DIR, SIGNERS, THRESHOLD, type SignerInfo } from '../common/config.js';
+import { KEYS_DIR, SIGNERS, THRESHOLD, XRPL_EXPLORER_ACCOUNT, type SignerInfo } from '../common/config.js';
+import { loadManifest } from '../common/chain.js';
 import type {
   Alert,
   BankMode,
   BankStatus,
+  ConsortiumChain,
   ConsortiumMember,
   ConsortiumStatus,
   GenerationRequest,
@@ -43,6 +45,24 @@ export const GROUP: {
 export const BANK_PUBLIC_KEY: string = (
   JSON.parse(readFileSync(resolve(KEYS_DIR, 'bank.pub.json'), 'utf8')) as { publicKey: string }
 ).publicKey;
+
+/** On-chain consortium (authority + member accounts) — undefined until setup:xrpl has run. */
+export const CONSORTIUM_CHAIN: ConsortiumChain | null = (() => {
+  try {
+    const m = loadManifest();
+    return {
+      authority: m.authority,
+      authorityExplorerUrl: XRPL_EXPLORER_ACCOUNT(m.authority),
+      quorum: m.quorum,
+      masterKeyDisabled: m.masterKeyDisabled,
+      members: Object.fromEntries(
+        Object.entries(m.members).map(([id, addr]) => [id, { address: addr, explorerUrl: XRPL_EXPLORER_ACCOUNT(addr) }]),
+      ),
+    };
+  } catch {
+    return null;
+  }
+})();
 
 // ---------------------------------------------------------------------------
 // constants / helpers
@@ -284,13 +304,19 @@ let signerHealthsRaw: SignerHealth[] = SIGNERS.map(offlineHealth);
 let lastConsortiumJson = '';
 
 export function getConsortiumStatus(): ConsortiumStatus {
-  const signers = signerHealthsRaw.map((h) => ({ ...h, revoked: !isMemberActive(h.signerId) }));
+  const signers = signerHealthsRaw.map((h) => ({
+    ...h,
+    revoked: !isMemberActive(h.signerId),
+    // overlay the on-chain address from the manifest so it shows even when offline
+    ...(h.xrplAddress ? {} : CONSORTIUM_CHAIN?.members[h.signerId] ? { xrplAddress: CONSORTIUM_CHAIN.members[h.signerId]!.address } : {}),
+  }));
   const quorumReachable = signers.filter((s) => s.online && !s.revoked).length >= THRESHOLD.t;
   return {
     threshold: { t: THRESHOLD.t, n: THRESHOLD.n },
     groupPublicKey: GROUP.groupPublicKey,
     signers,
     quorumReachable,
+    ...(CONSORTIUM_CHAIN ? { chain: CONSORTIUM_CHAIN } : {}),
   };
 }
 

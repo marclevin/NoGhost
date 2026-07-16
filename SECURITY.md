@@ -29,7 +29,33 @@ misuses tokens they actually bought (money received = tokens issued is still hon
   (declared PoC simplification) and **never reassembled**; each signer contributes a partial from its share alone.
   Fewer than 2 signers cannot produce a valid signature. The aggregate is a standard Ed25519 signature, so the
   simulated meter verifies it with a stock verifier and no knowledge of FROST.
-- **Ledger — witness.** Every authorisation is written to the XRPL testnet as hashes only (POPIA-safe, FR-11).
+- **Ledger — consensus + witness.** The consortium's agreement is carried out *on the XRPL testnet* (see
+  next section): the request is published encrypted, each member posts its own on-chain approval, and the
+  receipt is a native 2-of-3 multisign. On-chain payloads are hashes + ciphertext only (POPIA-safe, FR-11).
+
+## On-chain consortium consensus (native XRPL, no smart contracts)
+
+Each member (Utility, City A, City B) is its own XRPL account; a separate "authority" account carries a
+2-of-3 SignerList and has its **master key disabled**. The pipeline makes the consensus a ledger artifact:
+
+1. **Publish (tx #1).** The coordinator publishes the request `{request, debit}` **encrypted** (AES-256-GCM
+   under a shared consortium key, gzip-packed into one memo) to the authority account. The public ledger
+   carries ciphertext + a request hash, never PII.
+2. **Independent approval (tx #2–4).** Each member **reads the request from the ledger**, decrypts it,
+   verifies the bank attestation itself, and posts its own `APPROVE`/`REJECT` attestation **signed by its own
+   XRPL key** — genuine, attributable, multi-party endorsement recorded on-chain.
+3. **Load-bearing gate.** The FROST ceremony (`round2`) **refuses to sign unless it reads a quorum of on-chain
+   `APPROVE` attestations** for the request. This ties Wall 2 to the ledger: a compromised coordinator cannot
+   induce signing without a genuine, publicly-visible consortium approval.
+4. **Multisign receipt (tx #5).** The receipt is a native **XRPL 2-of-3 multisign** on the authority account.
+   Because the master key is disabled, **no single party — not even the coordinator — can emit a receipt
+   alone**; the ledger's own validators enforce the quorum.
+
+Why native primitives rather than an EVM sidechain + smart contract: the ledger provides ordering,
+immutability, attributable multi-party signatures, and multisign enforcement out of the box. The one thing a
+chain cannot do here — run the *validation logic* — is deliberately kept in the members' own software (each
+reads the ledger and checks independently), which is exactly the trust boundary the design requires. In
+production this moves to a permissioned Hyperledger Fabric / Corda network with per-institution endorsement.
 
 ## What the adversarial review found
 
