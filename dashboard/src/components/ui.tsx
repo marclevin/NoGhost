@@ -12,17 +12,20 @@ export const priceZar = (kwh: number): number => Math.round(kwh * RATE_ZAR_PER_K
 export const fmtZar = (n: number): string =>
   `R ${n.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
+/** Rendered in any cell that has no value yet. */
+export const NONE = '·';
+
 export function fmtTime(iso: string | null | undefined): string {
-  if (!iso) return '—';
+  if (!iso) return NONE;
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '—';
+  if (Number.isNaN(d.getTime())) return NONE;
   return d.toLocaleTimeString('en-GB', { hour12: false });
 }
 
 export function fmtDateTime(iso: string | null | undefined): string {
-  if (!iso) return '—';
+  if (!iso) return NONE;
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '—';
+  if (Number.isNaN(d.getTime())) return NONE;
   return `${d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })} ${d.toLocaleTimeString('en-GB', { hour12: false })}`;
 }
 
@@ -101,6 +104,55 @@ export const BoltIcon = (p: IconProps) => (
   </svg>
 );
 
+/**
+ * NoGhost brand mark: a ghost glyph struck through.
+ *
+ * Draws its own tile so the slash can be knocked out against a known backdrop
+ * (a plain diagonal over the silhouette turns to mush below ~20px). Colours come
+ * from the theme vars, which resolve because this is inline SVG in the document.
+ * The one copy that CANNOT share them is the favicon in index.html, since a
+ * data: URI has no access to the page stylesheet — keep the two in sync by hand.
+ */
+export const GhostMark = ({ className }: { className?: string }) => (
+  <svg viewBox="0 0 24 24" className={className} role="img" aria-label="NoGhost">
+    <rect width="24" height="24" rx="6.5" fill="var(--color-page)" />
+    <rect x="0.5" y="0.5" width="23" height="23" rx="6" fill="none" stroke="var(--color-edge-strong)" />
+    <path
+      d="M6.5 18V11a5.5 5.5 0 0 1 11 0v7l-2.75-1.75L12 18l-2.75-1.75L6.5 18Z"
+      fill="none"
+      stroke="var(--color-local)"
+      strokeWidth={1.8}
+      strokeLinejoin="round"
+      strokeLinecap="round"
+    />
+    {/* Sited so the strike consumes the right eye but clears the left one. Two
+        surviving eyes is impossible for any centred diagonal, and zero eyes stops
+        reading as a ghost at all, so one is the target, not a compromise. */}
+    <circle cx="9.2" cy="10.6" r="1.1" fill="var(--color-local)" />
+    <circle cx="14.8" cy="10.6" r="1.1" fill="var(--color-local)" />
+    <path d="M4.7 19.3 19.3 4.7" stroke="var(--color-page)" strokeWidth={3.2} strokeLinecap="round" />
+    <path d="M4.7 19.3 19.3 4.7" stroke="var(--color-bad)" strokeWidth={2.2} strokeLinecap="round" />
+  </svg>
+);
+
+/** Mark + wordmark lockup. `lg` is the loading screen, default is the top bar. */
+export function Brand({ size = 'sm' }: { size?: 'sm' | 'lg' }) {
+  const lg = size === 'lg';
+  return (
+    <div className="flex items-center gap-2.5">
+      <GhostMark className={lg ? 'h-11 w-11' : 'h-9 w-9'} />
+      <div className="leading-tight">
+        <div className={clsx('font-bold tracking-wide text-ink', lg ? 'text-lg' : 'text-[13px]')}>
+          No<span className="text-local">Ghost</span>
+        </div>
+        <div className={clsx('uppercase tracking-widest text-ink-faint', lg ? 'text-[11px]' : 'text-[10px]')}>
+          Prepaid Token Authority
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export const Spinner = ({ className }: { className?: string }) => (
   <svg viewBox="0 0 20 20" fill="none" className={clsx('spin', className)}>
     <circle cx="10" cy="10" r="7.5" stroke="currentColor" strokeOpacity={0.25} strokeWidth={2.5} />
@@ -154,22 +206,29 @@ export function PanelTitle({
   );
 }
 
-export type Tone = 'ok' | 'bad' | 'warn' | 'info' | 'ledger' | 'muted';
+/**
+ * `local` and `ledger` are the two ends of the chain axis (off-chain cyan /
+ * on-chain violet). `ok`/`bad` stay reserved for pass/fail so a verdict colour
+ * can never be mistaken for a chain-location colour.
+ */
+export type Tone = 'ok' | 'bad' | 'warn' | 'info' | 'local' | 'ledger' | 'muted';
 
 const toneText: Record<Tone, string> = {
   ok: 'text-ok-soft',
   bad: 'text-bad-soft',
   warn: 'text-warn-soft',
   info: 'text-info',
-  ledger: 'text-ledger',
+  local: 'text-local-soft',
+  ledger: 'text-ledger-soft',
   muted: 'text-ink-muted',
 };
 const toneBg: Record<Tone, string> = {
-  ok: 'bg-ok/12 border-ok/30',
-  bad: 'bg-bad/12 border-bad/30',
-  warn: 'bg-warn/12 border-warn/30',
-  info: 'bg-info/12 border-info/30',
-  ledger: 'bg-ledger/12 border-ledger/30',
+  ok: 'bg-ok/12 border-ok/35',
+  bad: 'bg-bad/12 border-bad/35',
+  warn: 'bg-warn/12 border-warn/35',
+  info: 'bg-info/12 border-info/35',
+  local: 'bg-local/12 border-local/35',
+  ledger: 'bg-ledger/14 border-ledger/40',
   muted: 'bg-white/5 border-edge',
 };
 
@@ -201,14 +260,20 @@ export function Chip({
 
 export function Dot({ tone = 'muted', pulse = false }: { tone?: Tone; pulse?: boolean }) {
   const bg: Record<Tone, string> = {
-    ok: 'bg-ok',
-    bad: 'bg-bad',
-    warn: 'bg-warn',
-    info: 'bg-info',
-    ledger: 'bg-ledger',
-    muted: 'bg-ink-faint',
+    ok: 'bg-ok text-ok',
+    bad: 'bg-bad text-bad',
+    warn: 'bg-warn text-warn',
+    info: 'bg-info text-info',
+    local: 'bg-local text-local',
+    ledger: 'bg-ledger text-ledger',
+    muted: 'bg-ink-faint text-ink-faint',
   };
-  return <span className={clsx('inline-block h-2 w-2 shrink-0 rounded-full', bg[tone], pulse && 'pulse')} />;
+  // `.glow` blooms in currentColor, hence the text-* alongside each bg-*.
+  return (
+    <span
+      className={clsx('inline-block h-2 w-2 shrink-0 rounded-full', bg[tone], pulse && 'pulse glow')}
+    />
+  );
 }
 
 export function CopyBtn({ text, className }: { text: string; className?: string }) {
@@ -253,17 +318,37 @@ export function Hash({ value, head = 10, tail = 8 }: { value: string; head?: num
   );
 }
 
+/** The universal "this lives on-chain" affordance, hence always the ledger violet. */
 export function ExplorerLink({ url, label = 'View on XRPL' }: { url: string; label?: string }) {
   return (
     <a
       href={url}
       target="_blank"
       rel="noreferrer"
-      className="inline-flex items-center gap-1 text-[12px] font-medium text-ledger transition hover:text-white"
+      className="inline-flex items-center gap-1 text-[12px] font-medium text-ledger transition hover:text-ledger-soft hover:underline"
     >
       {label}
       <LinkOutIcon className="h-3.5 w-3.5" />
     </a>
+  );
+}
+
+/**
+ * Teaches the chain axis once per panel so the cyan/violet split downstream reads
+ * as meaning rather than decoration.
+ */
+export function ChainLegend({ className }: { className?: string }) {
+  return (
+    <span className={clsx('flex items-center gap-3 text-[11px] text-ink-muted', className)}>
+      <span className="flex items-center gap-1.5">
+        <Dot tone="local" />
+        Off-chain
+      </span>
+      <span className="flex items-center gap-1.5">
+        <Dot tone="ledger" />
+        On-chain (XRPL)
+      </span>
+    </span>
   );
 }
 

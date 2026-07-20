@@ -3,12 +3,11 @@ import { useTwoWallsStore } from './store';
 import { TopBar, type TabId } from './components/TopBar';
 import { Toasts } from './components/Alerts';
 import { LiveFeed } from './components/LiveFeed';
-import { WallsPanel } from './components/WallsPanel';
 import { ReconPanel } from './components/ReconPanel';
 import { GovernancePanel } from './components/GovernancePanel';
 import { AuditPanel } from './components/AuditPanel';
 import { DemoControls } from './components/DemoControls';
-import { Spinner } from './components/ui';
+import { Brand, Spinner } from './components/ui';
 
 export default function App() {
   const { state, dispatch } = useTwoWallsStore();
@@ -18,20 +17,11 @@ export default function App() {
   if (!snap) {
     return (
       <div className="flex h-screen flex-col items-center justify-center gap-4">
-        <div className="flex items-center gap-2.5">
-          <span className="flex h-10 w-10 items-center justify-center gap-1 rounded-xl border border-edge-strong bg-panel-2 p-2">
-            <span className="h-full w-1.5 rounded-sm bg-ok" />
-            <span className="h-full w-1.5 rounded-sm bg-info" />
-          </span>
-          <div>
-            <div className="text-lg font-bold tracking-wide text-ink">NoGhost</div>
-            <div className="text-[11px] uppercase tracking-widest text-ink-faint">Prepaid Token Authority</div>
-          </div>
-        </div>
+        <Brand size="lg" />
         <div className="flex items-center gap-2 text-sm text-ink-muted">
-          <Spinner className="h-4 w-4 text-info" />
+          <Spinner className="h-4 w-4 text-local" />
           {state.conn === 'offline'
-            ? 'Coordinator unreachable — retrying…'
+            ? 'Coordinator unreachable. Retrying…'
             : 'Connecting to the coordinator…'}
         </div>
       </div>
@@ -46,7 +36,6 @@ export default function App() {
         {/* main panel area */}
         <main className="min-w-0 flex-1 overflow-y-auto p-4 xl:p-6">
           {tab === 'feed' && <LiveFeed snap={snap} />}
-          {tab === 'walls' && <WallsPanel snap={snap} />}
           {tab === 'recon' && <ReconPanel snap={snap} />}
           {tab === 'governance' && <GovernancePanel snap={snap} />}
           {tab === 'audit' && <AuditPanel snap={snap} />}

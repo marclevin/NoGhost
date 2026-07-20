@@ -42,9 +42,9 @@ export function GovernancePanel({ snap }: { snap: Snapshot }) {
     <section>
       <PanelTitle
         title="Consortium Governance"
-        sub="Membership, threshold policy, merchant vetting — every action logged and attributable."
+        sub="Membership, threshold policy, merchant vetting: every action logged and attributable."
         right={
-          <Chip tone="info" className="text-[12px]">
+          <Chip tone="local" className="text-[12px]">
             Threshold policy: {snap.consortium.threshold.t}-of-{snap.consortium.threshold.n} FROST
           </Chip>
         }
@@ -60,7 +60,7 @@ export function GovernancePanel({ snap }: { snap: Snapshot }) {
             {chain.masterKeyDisabled && <Chip tone="ok">master key DISABLED</Chip>}
           </div>
           <p className="mt-1 text-[12px] text-ink-muted">
-            Each member is its own on-chain account; receipts require {chain.quorum}-of-{snap.consortium.threshold.n} — no smart contract.
+            Each member is its own on-chain account; receipts require {chain.quorum}-of-{snap.consortium.threshold.n}, with no smart contract.
           </p>
           <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border border-ledger/20 bg-ledger/6 px-3 py-2 text-[12px]">
             <span className="text-[10px] font-bold uppercase tracking-wider text-ledger">Authority account</span>
@@ -151,7 +151,7 @@ export function GovernancePanel({ snap }: { snap: Snapshot }) {
                   <td className="px-4 py-2.5 font-medium text-ink">{mc.name}</td>
                   <td className="px-4 py-2.5">
                     <span className="flex flex-wrap gap-1.5">
-                      <Chip tone={mc.vetted ? 'info' : 'warn'}>{mc.vetted ? 'vetted' : 'unvetted'}</Chip>
+                      <Chip tone={mc.vetted ? 'local' : 'warn'}>{mc.vetted ? 'vetted' : 'unvetted'}</Chip>
                       {mc.revoked && <Chip tone="bad">REVOKED</Chip>}
                     </span>
                   </td>
@@ -185,7 +185,7 @@ export function GovernancePanel({ snap }: { snap: Snapshot }) {
                   <span
                     className={clsx(
                       'shrink-0 font-mono text-[11px] font-semibold',
-                      e.action.includes('REVOKED') ? 'text-bad-soft' : e.action.includes('REINSTATED') ? 'text-ok-soft' : 'text-info',
+                      e.action.includes('REVOKED') ? 'text-bad-soft' : e.action.includes('REINSTATED') ? 'text-ok-soft' : 'text-local-soft',
                     )}
                   >
                     {e.action}

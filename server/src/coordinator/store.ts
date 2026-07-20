@@ -193,7 +193,7 @@ const members: ConsortiumMember[] = SIGNERS.map((s) => ({
   bond: {
     posture: 'BONDED' as const,
     amountZar: 5_000_000,
-    note: 'Conceptual performance bond (FRD §6.2-D) — displayed, not enforced in the PoC.',
+    note: 'Conceptual performance bond (FRD §6.2-D): displayed, not enforced in the PoC.',
   },
 }));
 
@@ -429,8 +429,8 @@ function onTerminal(status: RequestStatus): void {
   if (rec.delta !== 0 && rec.delta !== lastDelta) {
     addAlert({
       severity: 'critical',
-      title: 'Reconciliation divergence — Δ ≠ 0',
-      message: `tokens=${rec.tokensIssued} debits=${rec.confirmedDebits} records=${rec.onChainRecords} (Δ=${rec.delta}). Honest operation makes divergence impossible — this indicates a system fault or tampering (FR-D3).`,
+      title: 'Reconciliation divergence: Δ ≠ 0',
+      message: `tokens=${rec.tokensIssued} debits=${rec.confirmedDebits} records=${rec.onChainRecords} (Δ=${rec.delta}). Honest operation makes divergence impossible; this indicates a system fault or tampering (FR-D3).`,
       attribution: 'reconciliation',
     });
   }

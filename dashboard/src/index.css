@@ -1,33 +1,43 @@
 @import "tailwindcss";
 
 @theme {
-  /* Surfaces */
-  --color-page: #0b1220;
-  --color-panel: #111a2e;
-  --color-panel-2: #16203a;
-  --color-panel-3: #1c2947;
-  --color-edge: rgba(255, 255, 255, 0.08);
-  --color-edge-strong: rgba(255, 255, 255, 0.14);
+  /* Surfaces: deep, cool, low-noise so the accents read as genuinely luminous. */
+  --color-page: #060a16;
+  --color-panel: #0e1729;
+  --color-panel-2: #142138;
+  --color-panel-3: #1b2c49;
+  --color-edge: rgba(148, 190, 255, 0.1);
+  --color-edge-strong: rgba(148, 190, 255, 0.2);
 
   /* Ink */
-  --color-ink: #e2e8f0;
-  --color-ink-muted: #94a3b8;
-  --color-ink-faint: #64748b;
+  --color-ink: #e8eef8;
+  --color-ink-muted: #9fb3ce;
+  --color-ink-faint: #6b7f9e;
 
-  /* Semantics */
-  --color-ok: #10b981;
-  --color-ok-soft: #34d399;
-  --color-bad: #ef4444;
-  --color-bad-soft: #f87171;
-  --color-warn: #f59e0b;
-  --color-warn-soft: #fbbf24;
-  --color-info: #38bdf8;
-  --color-ledger: #a78bfa;
+  /* Verdict colours. Reserved: green/red never carry any other meaning. */
+  --color-ok: #00e5a0;
+  --color-ok-soft: #5cf5c4;
+  --color-bad: #ff3b5c;
+  --color-bad-soft: #ff8098;
+  --color-warn: #ffb020;
+  --color-warn-soft: #ffcb5c;
+
+  /* Neutral informational (alert severity "info", connection handshake). Kept
+     bluer than --color-local so it never reads as an off-chain indicator. */
+  --color-info: #60a5fa;
+
+  /* The chain axis. Every indicator in the app is one of these two:
+       local  = off-chain, happens inside our own trust boundary (cyan)
+       ledger = on-chain, witnessed on the XRPL testnet (violet)  */
+  --color-local: #22d3ee;
+  --color-local-soft: #67e8f9;
+  --color-ledger: #a855f7;
+  --color-ledger-soft: #c887ff;
 
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
     "Helvetica Neue", Arial, sans-serif;
 
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.35), 0 6px 20px rgba(0, 0, 0, 0.22);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 26px rgba(0, 0, 0, 0.34);
 }
 
 html,
@@ -40,9 +50,11 @@ body {
   color: var(--color-ink);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  /* Off-chain cyan on the left, on-chain violet on the right: the chain axis is
+     hinted by the room itself before a single component draws. */
   background-image:
-    radial-gradient(1100px 480px at 18% -8%, rgba(56, 189, 248, 0.055), transparent 60%),
-    radial-gradient(900px 420px at 85% -10%, rgba(167, 139, 250, 0.05), transparent 60%);
+    radial-gradient(1100px 500px at 14% -10%, rgba(34, 211, 238, 0.1), transparent 62%),
+    radial-gradient(950px 460px at 88% -12%, rgba(168, 85, 247, 0.09), transparent 62%);
   background-attachment: fixed;
 }
 
@@ -65,19 +77,31 @@ body {
   animation: pulse-dot 1.5s ease-in-out infinite;
 }
 
+/* Expanding halo on the pipeline step that is currently executing. `currentColor`
+   so the halo inherits the step's own track colour (cyan off-chain / violet on). */
 @keyframes ring-pulse {
   0% {
-    box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.45);
+    box-shadow: 0 0 0 0 currentColor;
   }
   70% {
-    box-shadow: 0 0 0 7px rgba(56, 189, 248, 0);
+    box-shadow: 0 0 0 7px transparent;
   }
   100% {
-    box-shadow: 0 0 0 0 rgba(56, 189, 248, 0);
+    box-shadow: 0 0 0 0 transparent;
   }
 }
 .ring-pulse {
   animation: ring-pulse 1.4s ease-out infinite;
+}
+
+/* ---- electric glow ----
+   A soft bloom in the element's own text colour. Used sparingly: live/active
+   state only, never on static chrome, or the whole page turns to neon soup. */
+.glow {
+  box-shadow: 0 0 14px -3px currentColor;
+}
+.glow-text {
+  text-shadow: 0 0 16px currentColor;
 }
 
 @keyframes toast-in {
@@ -111,10 +135,10 @@ body {
 @keyframes alarm-glow {
   0%,
   100% {
-    box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.45), 0 0 24px rgba(239, 68, 68, 0.14);
+    box-shadow: 0 0 0 1px rgba(255, 59, 92, 0.45), 0 0 24px rgba(255, 59, 92, 0.16);
   }
   50% {
-    box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.8), 0 0 34px rgba(239, 68, 68, 0.28);
+    box-shadow: 0 0 0 1px rgba(255, 59, 92, 0.85), 0 0 36px rgba(255, 59, 92, 0.32);
   }
 }
 .alarm-glow {
@@ -133,18 +157,34 @@ body {
 /* ---- scrollbars ---- */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #2b3a58 transparent;
+  scrollbar-color: #24395e transparent;
 }
 *::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 *::-webkit-scrollbar-thumb {
-  background: #2b3a58;
+  background: #24395e;
   border-radius: 8px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #325081;
 }
 *::-webkit-scrollbar-track {
   background: transparent;
+}
+
+/* Scrollable but with no visible bar: for strips like the tab nav, where the
+   content is reachable by swipe/wheel and a bar would only be chrome noise.
+   Declared after the `*` rules above so it wins on equal specificity. */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
 }
 
 /* recharts surface resets */

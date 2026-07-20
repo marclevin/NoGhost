@@ -71,14 +71,14 @@ async function abandon(record: PipelineRecord, wall: Wall, reason: string, attri
     wall,
     requestId: record.request.requestId,
     title: reversed
-      ? 'Request abandoned — debit reversed, customer refunded'
-      : 'Request abandoned — DEBIT REVERSAL FAILED',
+      ? 'Request abandoned: debit reversed, customer refunded'
+      : 'Request abandoned: DEBIT REVERSAL FAILED',
     message: reversed
       ? `${reason}. The confirmed debit ${debitRef ?? ''} was reversed at the bank; no token exists (FR-21).`
-      : `${reason}. Reversal of ${debitRef ?? 'the debit'} could not be confirmed — manual reconciliation required.`,
+      : `${reason}. Reversal of ${debitRef ?? 'the debit'} could not be confirmed; manual reconciliation required.`,
     attribution,
   });
-  store.transition(record, 'REJECTED_ABANDONED', reversed ? `${reason} — debit reversed` : `${reason} — debit reversal FAILED`);
+  store.transition(record, 'REJECTED_ABANDONED', reversed ? `${reason} · debit reversed` : `${reason} · debit reversal FAILED`);
 }
 
 // ---------------------------------------------------------------------------
@@ -277,7 +277,7 @@ export async function runPipeline(record: PipelineRecord): Promise<void> {
         wall: 'POLICY',
         requestId,
         title: 'Unknown merchant blocked',
-        message: `Merchant ${merchantId} is not registered — request rejected before any funds movement.`,
+        message: `Merchant ${merchantId} is not registered; request rejected before any funds movement.`,
         attribution: merchantId,
       });
       return reject(record, 'POLICY', `UNKNOWN_MERCHANT (${merchantId})`, merchantId);
@@ -288,7 +288,7 @@ export async function runPipeline(record: PipelineRecord): Promise<void> {
         wall: 'POLICY',
         requestId,
         title: 'Revoked merchant blocked',
-        message: `Merchant ${merchant.name} (${merchantId}) is revoked — request rejected (FR-19).`,
+        message: `Merchant ${merchant.name} (${merchantId}) is revoked; request rejected (FR-19).`,
         attribution: merchantId,
       });
       return reject(record, 'POLICY', `MERCHANT_REVOKED (${merchant.name})`, merchantId);
@@ -307,8 +307,8 @@ export async function runPipeline(record: PipelineRecord): Promise<void> {
         severity: 'warning',
         wall: 'WALL_2_CONSORTIUM',
         requestId,
-        title: 'Quorum unreachable — blocked at Wall 2 (no debit taken)',
-        message: `Only ${preflight.length} of ${SIGNERS.length} consortium signers available; ${THRESHOLD.t} are required. The customer was not charged — no single insider can generate.`,
+        title: 'Quorum unreachable: blocked at Wall 2 (no debit taken)',
+        message: `Only ${preflight.length} of ${SIGNERS.length} consortium signers available; ${THRESHOLD.t} are required. The customer was not charged; no single insider can generate.`,
         attribution: 'consortium',
       });
       return reject(
@@ -339,7 +339,7 @@ export async function runPipeline(record: PipelineRecord): Promise<void> {
         severity: 'warning',
         wall: 'WALL_1_BANK',
         requestId,
-        title: 'Bank unreachable — blocked at Wall 1',
+        title: 'Bank unreachable: blocked at Wall 1',
         message: 'No confirmed debit could be obtained; without one no token can exist.',
         attribution: merchantId,
       });
@@ -360,7 +360,7 @@ export async function runPipeline(record: PipelineRecord): Promise<void> {
         wall: 'WALL_1_BANK',
         requestId,
         title: 'Ghost-vend attempt blocked at Wall 1',
-        message: `The bank did not confirm the debit (${reason}). No funds moved — no token will ever exist for this request.`,
+        message: `The bank did not confirm the debit (${reason}). No funds moved; no token will ever exist for this request.`,
         attribution: merchantId,
       });
       return reject(record, 'WALL_1_BANK', reason, merchantId);
@@ -375,7 +375,7 @@ export async function runPipeline(record: PipelineRecord): Promise<void> {
         wall: 'WALL_1_BANK',
         requestId,
         title: 'Ghost-vend attempt blocked at Wall 1',
-        message: 'The bank attestation failed independent signature verification (FR-3) — forged or absent confirmation.',
+        message: 'The bank attestation failed independent signature verification (FR-3): forged or absent confirmation.',
         attribution: merchantId,
       });
       return reject(record, 'WALL_1_BANK', 'BANK_SIGNATURE_INVALID', merchantId);
@@ -390,13 +390,13 @@ export async function runPipeline(record: PipelineRecord): Promise<void> {
         severity: 'critical',
         wall: 'POLICY',
         requestId,
-        title: 'Debit replay blocked — one debit, one token',
+        title: 'Debit replay blocked: one debit, one token',
         message: `debitRef ${debit.debitRef} was already consumed by request ${claim.byRequestId} (FR-20).`,
         attribution: merchantId,
       });
       return reject(record, 'POLICY', 'DEBIT_ALREADY_CONSUMED', merchantId);
     }
-    store.transition(record, 'DEBIT_CONFIRMED', `debitRef ${debit.debitRef} — R${debit.amount} confirmed & verified`);
+    store.transition(record, 'DEBIT_CONFIRMED', `debitRef ${debit.debitRef} · R${debit.amount} confirmed & verified`);
 
     // ---- 4. publish the request ENCRYPTED on-chain ------------------------
     stage = 'LEDGER';
@@ -449,7 +449,7 @@ export async function runPipeline(record: PipelineRecord): Promise<void> {
         severity: 'warning',
         wall: 'WALL_2_CONSORTIUM',
         requestId,
-        title: 'Quorum lost mid-flight — blocked at Wall 2',
+        title: 'Quorum lost mid-flight: blocked at Wall 2',
         message: `Only ${online.length} of ${SIGNERS.length} consortium signers available; ${THRESHOLD.t} are required. No single insider can generate; the confirmed debit will be reversed.`,
         attribution: 'consortium',
       });
@@ -477,7 +477,7 @@ export async function runPipeline(record: PipelineRecord): Promise<void> {
         return await abandon(
           record,
           'WALL_2_CONSORTIUM',
-          `SIGNERS_REFUSED (${[...refused].join(', ')}) — no spare signer available`,
+          `SIGNERS_REFUSED (${[...refused].join(', ')}) · no spare signer available`,
           [...refused].join(', ') || 'consortium',
         );
       }
@@ -492,7 +492,7 @@ export async function runPipeline(record: PipelineRecord): Promise<void> {
           wall: 'WALL_2_CONSORTIUM',
           requestId,
           title: `Signer refused to sign: ${outcome.signerId}`,
-          message: `${outcome.reason ?? 'No reason given'} — refusal logged attributably; trying spare signer.`,
+          message: `${outcome.reason ?? 'No reason given'} · refusal logged attributably; trying spare signer.`,
           attribution: outcome.signerId,
         });
         continue;
@@ -504,7 +504,7 @@ export async function runPipeline(record: PipelineRecord): Promise<void> {
             wall: 'WALL_2_CONSORTIUM',
             requestId,
             title: `Invalid partial signature from ${outcome.badSigner}`,
-            message: 'The partial signature failed share verification — misbehaviour is attributable to this signer.',
+            message: 'The partial signature failed share verification: misbehaviour is attributable to this signer.',
             attribution: outcome.badSigner,
           });
         }

@@ -185,7 +185,7 @@ function seed() {
       ],
       rejection: {
         wall: 'WALL_1_BANK',
-        reason: 'Debit declined — no funds movement authorised.',
+        reason: 'Debit declined: no funds movement authorised.',
         at: iso(9 * 60_000 - 900),
         attribution: req.merchantId,
       },
@@ -193,7 +193,7 @@ function seed() {
     pushAlert(
       'critical',
       'Ghost-vend attempt blocked at Wall 1',
-      `Request for ${req.amountKwh} kWh on ${req.meterId} had no confirmed debit — token never created.`,
+      `Request for ${req.amountKwh} kWh on ${req.meterId} had no confirmed debit; token never created.`,
       req.merchantId,
       'WALL_1_BANK',
       req.requestId,
@@ -222,7 +222,7 @@ function seed() {
     });
     pushAlert(
       'warning',
-      'Quorum unreachable — generation blocked at Wall 2',
+      'Quorum unreachable: generation blocked at Wall 2',
       'Only 1 of 3 signers available (need 2). Debit reversed, customer refunded.',
       'city-a, city-b',
       'WALL_2_CONSORTIUM',
@@ -247,12 +247,12 @@ function seed() {
       signerSet: ['utility', 'city-b'],
       rejection: {
         wall: 'LEDGER',
-        reason: 'XRPL submission failed (network) — request abandoned',
+        reason: 'XRPL submission failed (network): request abandoned',
         at: iso(4 * 60_000 - 4000),
         attribution: 'xrpl-testnet',
       },
     });
-    pushAlert('info', 'Request abandoned — debit reversed', 'Ledger write failed; the confirmed debit was reversed and the customer refunded (FR-21).', 'xrpl-testnet', 'LEDGER', req.requestId);
+    pushAlert('info', 'Request abandoned: debit reversed', 'Ledger write failed; the confirmed debit was reversed and the customer refunded (FR-21).', 'xrpl-testnet', 'LEDGER', req.requestId);
   }
 
   recs.push(makeDelivered(80, 2 * 60_000));
@@ -335,7 +335,7 @@ function runGhost(rec) {
   setTimeout(() => {
     rec.rejection = {
       wall: 'WALL_1_BANK',
-      reason: 'Debit declined — no funds movement authorised.',
+      reason: 'Debit declined: no funds movement authorised.',
       at: iso(),
       attribution: rec.request.merchantId,
     };
@@ -344,7 +344,7 @@ function runGhost(rec) {
     pushAlert(
       'critical',
       'Ghost-vend attempt blocked at Wall 1',
-      `Request for ${rec.request.amountKwh} kWh on ${rec.request.meterId} had no confirmed debit — the token was never born.`,
+      `Request for ${rec.request.amountKwh} kWh on ${rec.request.meterId} had no confirmed debit; the token was never born.`,
       rec.request.merchantId,
       'WALL_1_BANK',
       rec.request.requestId,
@@ -366,11 +366,11 @@ function runCollusion(rec) {
       at: iso(),
       attribution: 'signers offline: city-a, city-b',
     };
-    transition(rec, 'REJECTED', 'below threshold — no round 1 attempted');
+    transition(rec, 'REJECTED', 'below threshold; no round 1 attempted');
     pushAlert(
       'warning',
       'Collusion-short blocked at Wall 2',
-      'Only 1 of 3 signers participated — below the 2-of-3 threshold. One insider holds a useless fragment.',
+      'Only 1 of 3 signers participated; below the 2-of-3 threshold. One insider holds a useless fragment.',
       'utility (alone)',
       'WALL_2_CONSORTIUM',
       rec.request.requestId,

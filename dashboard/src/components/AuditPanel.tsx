@@ -1,6 +1,6 @@
 /** Panel E — Audit Trail: chronological on-chain authorisation records, each linking out to XRPL (FR-D5). */
 import type { LedgerRecord, Snapshot } from '../types';
-import { Card, Chip, EmptyState, ExplorerLink, Hash, PanelTitle, fmtDateTime } from './ui';
+import { Card, Chip, EmptyState, ExplorerLink, Hash, NONE, PanelTitle, fmtDateTime } from './ui';
 
 function ledgerRecords(snap: Snapshot): LedgerRecord[] {
   return snap.requests.filter((r) => r.ledger).map((r) => r.ledger as LedgerRecord);
@@ -11,7 +11,7 @@ export function AuditPanel({ snap }: { snap: Snapshot }) {
   return (
     <section>
       <PanelTitle
-        title="Audit Trail — immutable witness"
+        title="Audit Trail: immutable witness"
         sub="Every authorisation is anchored on the XRPL testnet: hashes only (POPIA-safe), independently verifiable off this dashboard."
         right={
           <span className="tnum text-[12px] text-ink-faint">
@@ -22,7 +22,7 @@ export function AuditPanel({ snap }: { snap: Snapshot }) {
       <Card className="overflow-hidden">
         {records.length === 0 ? (
           <div className="p-5">
-            <EmptyState>No on-chain records yet — deliver a token to write the first one.</EmptyState>
+            <EmptyState>No on-chain records yet. Deliver a token to write the first one.</EmptyState>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -53,15 +53,16 @@ export function AuditPanel({ snap }: { snap: Snapshot }) {
                     </td>
                     <td className="px-4 py-2.5">
                       <span className="flex flex-wrap gap-1">
+                        {/* the FROST quorum itself is an off-chain artefact */}
                         {rec.signerSet.map((s) => (
-                          <Chip key={s} tone="info">
+                          <Chip key={s} tone="local">
                             {s}
                           </Chip>
                         ))}
                         {rec.multisign && <Chip tone="ledger">2-of-3 multisign</Chip>}
                       </span>
                     </td>
-                    <td className="tnum px-4 py-2.5 text-ink-muted">{rec.ledgerIndex ?? '—'}</td>
+                    <td className="tnum px-4 py-2.5 text-ink-muted">{rec.ledgerIndex ?? NONE}</td>
                     <td className="whitespace-nowrap px-4 py-2.5">
                       <span className="inline-flex items-center gap-1">
                         <Hash value={rec.txHash} head={8} tail={6} />

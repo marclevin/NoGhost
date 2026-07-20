@@ -5,6 +5,7 @@ import { Stepper } from './Stepper';
 import {
   BoltIcon,
   Card,
+  ChainLegend,
   Chip,
   EmptyState,
   ExplorerLink,
@@ -19,8 +20,8 @@ import {
 } from './ui';
 
 const WALL_LABEL: Record<string, string> = {
-  WALL_1_BANK: 'Wall 1 — Bank',
-  WALL_2_CONSORTIUM: 'Wall 2 — Consortium',
+  WALL_1_BANK: 'Wall 1: Bank',
+  WALL_2_CONSORTIUM: 'Wall 2: Consortium',
   LEDGER: 'Ledger',
   POLICY: 'Policy gate',
 };
@@ -32,11 +33,12 @@ function statusChip(rec: PipelineRecord): { tone: Tone; label: string; busy?: bo
     case 'REJECTED':
       return { tone: 'bad', label: 'REJECTED' };
     case 'REJECTED_ABANDONED':
-      return { tone: 'bad', label: 'ABANDONED — DEBIT REVERSED' };
+      return { tone: 'bad', label: 'ABANDONED · DEBIT REVERSED' };
+    // In-flight stages carry the chain tone of wherever the work is happening.
     case 'PENDING':
-      return { tone: 'info', label: 'AWAITING DEBIT', busy: true };
+      return { tone: 'local', label: 'AWAITING DEBIT', busy: true };
     case 'DEBIT_CONFIRMED':
-      return { tone: 'info', label: 'IN CEREMONY', busy: true };
+      return { tone: 'local', label: 'IN CEREMONY', busy: true };
     case 'PUBLISHED':
       return { tone: 'ledger', label: 'PUBLISHED ON-CHAIN', busy: true };
     case 'APPROVED':
@@ -62,7 +64,7 @@ function ApprovalChip({ a }: { a: OnChainApproval }) {
       href={a.explorerUrl}
       target="_blank"
       rel="noopener noreferrer"
-      title={`${a.signerId} · ${a.verdict}${a.reason ? ` — ${a.reason}` : ''} · ${a.fromAddress}`}
+      title={`${a.signerId} · ${a.verdict}${a.reason ? ` · ${a.reason}` : ''} · ${a.fromAddress}`}
       className={clsx(
         'group inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium leading-4 transition',
         approve ? 'border-ok/30 bg-ok/12 hover:bg-ok/20' : 'border-bad/30 bg-bad/12 hover:bg-bad/20',
@@ -119,25 +121,28 @@ function RequestCard({ rec, merchants }: { rec: PipelineRecord; merchants: Merch
                 Attribution: <span className="font-medium text-ink">{rec.rejection.attribution}</span>
               </span>
               {rec.debitReversed && (
-                <span className="font-medium text-warn-soft">Debit reversed — customer refunded</span>
+                <span className="font-medium text-warn-soft">Debit reversed, customer refunded</span>
               )}
             </div>
           </div>
         )}
 
-        {(rec.publication || (rec.approvals && rec.approvals.length > 0)) && (
-          <div className="mt-3 flex flex-col gap-2 rounded-lg border border-ledger/25 bg-ledger/6 px-3 py-2">
+        {/* Everything the XRPL witnessed. The ledger receipt lives here rather than
+            in the delivery block below so each block sits wholly on one side of
+            the chain axis and the violet/cyan split stays truthful. */}
+        {(rec.publication || (rec.approvals && rec.approvals.length > 0) || rec.ledger) && (
+          <div className="mt-3 flex flex-col gap-2 rounded-lg border border-ledger/30 bg-ledger/8 px-3 py-2">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[12px]">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-ledger">On-chain consensus</span>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-ledger">On-chain · XRPL</span>
               {rec.publication && (
                 <>
                   <a
                     href={rec.publication.explorerUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 font-medium text-ledger transition hover:text-white"
+                    className="inline-flex items-center gap-1 font-medium text-ledger transition hover:text-ledger-soft hover:underline"
                   >
-                    Request on-chain
+                    Request published
                     <LinkOutIcon className="h-3.5 w-3.5" />
                   </a>
                   <code
@@ -147,6 +152,12 @@ function RequestCard({ rec, merchants }: { rec: PipelineRecord; merchants: Merch
                     {truncMiddle(rec.publication.requestTxHash, 6, 4)}
                   </code>
                 </>
+              )}
+              {rec.ledger && (
+                <ExplorerLink
+                  url={rec.ledger.explorerUrl}
+                  label={rec.ledger.multisign ? '2-of-3 multisign receipt' : 'Receipt on XRPL'}
+                />
               )}
             </div>
             {rec.approvals && rec.approvals.length > 0 && (
@@ -160,10 +171,11 @@ function RequestCard({ rec, merchants }: { rec: PipelineRecord; merchants: Merch
         )}
 
         {rec.status === 'DELIVERED' && rec.token && (
-          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-lg border border-ok/25 bg-ok/8 px-3 py-2 text-[12px]">
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-lg border border-local/30 bg-local/8 px-3 py-2 text-[12px]">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-local">Off-chain</span>
             <span className="text-ink-muted">
               Token nonce{' '}
-              <code className="font-mono text-ok-soft" title={rec.token.nonce}>
+              <code className="font-mono text-local-soft" title={rec.token.nonce}>
                 {truncMiddle(rec.token.nonce, 8, 6)}
               </code>
             </span>
@@ -177,12 +189,6 @@ function RequestCard({ rec, merchants }: { rec: PipelineRecord; merchants: Merch
                 Dispensed <span className="font-medium text-ink">{rec.meterDelivery.dispensedKwh} kWh</span>
               </span>
             )}
-            {rec.ledger && (
-              <ExplorerLink
-                url={rec.ledger.explorerUrl}
-                label={rec.ledger.multisign ? '2-of-3 multisign receipt' : 'View on XRPL'}
-              />
-            )}
           </div>
         )}
       </div>
@@ -195,16 +201,18 @@ export function LiveFeed({ snap }: { snap: Snapshot }) {
     <section>
       <PanelTitle
         title="Live Generation Feed"
-        sub="Every token request, live — passing through both walls or stopped dead at one of them."
+        sub="Every token request, live: passing through both walls or stopped dead at one of them."
         right={
           <span className="tnum text-[12px] text-ink-faint">
             {snap.requests.length} request{snap.requests.length === 1 ? '' : 's'}
           </span>
         }
       />
+      {/* Left-aligned rather than in the title's right slot, which toasts overlap. */}
+      <ChainLegend className="mb-3" />
       <div className="flex flex-col gap-3">
         {snap.requests.length === 0 && (
-          <EmptyState>No requests yet — fire a scenario from the Demo Control panel.</EmptyState>
+          <EmptyState>No requests yet. Fire a scenario from the Demo Control panel.</EmptyState>
         )}
         {snap.requests.map((rec) => (
           <RequestCard key={rec.request.requestId} rec={rec} merchants={snap.merchants} />

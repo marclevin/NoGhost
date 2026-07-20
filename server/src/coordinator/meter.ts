@@ -21,7 +21,7 @@ export type DeliveryResult = { ok: true } | { ok: false; reason: string };
  *  orphan on-chain record behind. Credits nothing. */
 export function verifyTokenForMeter(token: Token): DeliveryResult {
   if (usedNonces.has(token.nonce) || usedDebitRefs.has(token.debitRef)) {
-    return { ok: false, reason: 'METER_REPLAY — a token for this debit was already redeemed' };
+    return { ok: false, reason: 'METER_REPLAY: a token for this debit was already redeemed' };
   }
   const payload: TokenPayload = {
     meterId: token.meterId,
@@ -30,7 +30,7 @@ export function verifyTokenForMeter(token: Token): DeliveryResult {
     nonce: token.nonce,
   };
   if (!verifySignature(token.signature, canonicalBytes(payload), store.GROUP.groupPublicKey)) {
-    return { ok: false, reason: 'METER_SIGNATURE_INVALID — token does not verify against the group public key' };
+    return { ok: false, reason: 'METER_SIGNATURE_INVALID: token does not verify against the group public key' };
   }
   return { ok: true };
 }

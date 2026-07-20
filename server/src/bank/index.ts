@@ -97,7 +97,7 @@ app.post('/api/debits', async (req, res) => {
   switch (mode) {
     case 'DECLINE': {
       log('debit.declined', { requestId: body.requestId, merchantId: body.merchantId });
-      res.status(402).json({ declined: true, reason: 'Debit declined — no funds movement authorised.' });
+      res.status(402).json({ declined: true, reason: 'Debit declined: no funds movement authorised.' });
       return;
     }
     case 'TIMEOUT': {

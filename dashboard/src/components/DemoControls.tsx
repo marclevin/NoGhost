@@ -1,4 +1,4 @@
-/** Demo Control rail (FRD §6.3) — always visible: scenario buttons + raw bank/signer toggles. */
+/** Demo Control rail (FRD §6.3), always visible: scenario buttons + raw bank/signer toggles. */
 import { useEffect, useRef, useState } from 'react';
 import clsx from 'clsx';
 import { api, type ScenarioKind } from '../api';
@@ -24,14 +24,14 @@ const SCENARIOS: ScenarioDef[] = [
   {
     kind: 'ghost',
     title: 'Insider ghost-vend',
-    desc: 'Bank withholds the debit — the token is never born.',
+    desc: 'Bank withholds the debit, so the token is never born.',
     accent: 'border-bad/40 hover:bg-bad/10',
     expected: 'blocked at Wall 1',
   },
   {
     kind: 'collusion-short',
     title: 'Collusion short',
-    desc: 'Only 1 of 3 signers — one insider holds a useless fragment.',
+    desc: 'Only 1 of 3 signers, so one insider holds a useless fragment.',
     accent: 'border-warn/40 hover:bg-warn/10',
     expected: 'blocked at Wall 2',
   },
@@ -50,11 +50,11 @@ function isTerminal(rec: PipelineRecord): boolean {
 }
 
 function outcomeOf(rec: PipelineRecord): { ok: boolean; label: string } {
-  if (rec.status === 'DELIVERED') return { ok: true, label: 'DELIVERED — token issued, Δ stays 0' };
+  if (rec.status === 'DELIVERED') return { ok: true, label: 'DELIVERED · token issued, Δ stays 0' };
   const wall = rec.rejection?.wall ?? 'unknown';
-  // Match the Live Feed verb (statusChip: 'ABANDONED — DEBIT REVERSED') so the
+  // Match the Live Feed verb (statusChip: 'ABANDONED · DEBIT REVERSED') so the
   // two surfaces agree for a request whose terminal status is REJECTED_ABANDONED.
-  if (rec.status === 'REJECTED_ABANDONED') return { ok: false, label: `ABANDONED at ${wall} — debit reversed` };
+  if (rec.status === 'REJECTED_ABANDONED') return { ok: false, label: `ABANDONED at ${wall} · debit reversed` };
   return { ok: false, label: `REJECTED at ${wall}` };
 }
 
@@ -100,7 +100,7 @@ function ScenarioButton({ def, snap }: { def: ScenarioDef; snap: Snapshot }) {
       >
         <span className="flex items-center gap-2">
           <span className="text-[13px] font-semibold text-ink">{def.title}</span>
-          {busy && <Spinner className="ml-auto h-4 w-4 text-info" />}
+          {busy && <Spinner className="ml-auto h-4 w-4 text-local" />}
         </span>
         <span className="mt-0.5 block text-[11px] leading-snug text-ink-muted">{def.desc}</span>
         <span className="mt-1 block text-[10px] uppercase tracking-wider text-ink-faint">
@@ -144,14 +144,14 @@ export function DemoControls({ snap }: { snap: Snapshot }) {
         <h2 className="flex items-center gap-2 text-[13px] font-bold uppercase tracking-wider text-ink">
           Demo Control
           {snap.demo.activeScenario && (
-            <Chip tone="info">
+            <Chip tone="local">
               <Spinner className="h-3 w-3" />
               {snap.demo.activeScenario}
             </Chip>
           )}
         </h2>
         <p className="mt-0.5 text-[11px] leading-snug text-ink-faint">
-          The scripted spine of the live demo — fire an attack, watch a wall stop it.
+          The scripted spine of the live demo: fire an attack, watch a wall stop it.
         </p>
       </div>
 
@@ -204,7 +204,7 @@ export function DemoControls({ snap }: { snap: Snapshot }) {
             >
               <Dot tone={s.online ? 'ok' : 'bad'} pulse={s.online} />
               <span className="text-[12px] font-medium text-ink">{s.name}</span>
-              {signerBusy === s.signerId && <Spinner className="h-3 w-3 text-info" />}
+              {signerBusy === s.signerId && <Spinner className="h-3 w-3 text-local" />}
               {/* toggle track */}
               <span
                 className={clsx(
@@ -220,7 +220,7 @@ export function DemoControls({ snap }: { snap: Snapshot }) {
       </div>
 
       <p className="mt-auto pt-2 text-[10px] leading-snug text-ink-faint/80">
-        UZH proof-of-concept — FROST 2-of-3 over Ed25519, XRPL testnet witness. Insider fraud impossible by
+        UZH proof-of-concept. FROST 2-of-3 over Ed25519, XRPL testnet witness. Insider fraud impossible by
         construction, not by audit.
       </p>
     </aside>

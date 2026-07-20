@@ -2,10 +2,14 @@
  * Panel C — Reconciliation / internal conservation.
  * Counters + huge Δ tile + Recharts cumulative series + drill-down table.
  *
- * Chart palette validated with the dataviz six-checks validator on surface
- * #111A2E (dark): #059669 / #0284C7 / #8B5CF6 — all hard gates pass; the
- * sky↔violet CVD pair sits in the 6–8 floor band, so identity is doubly
- * encoded with distinct dash patterns + labeled legend chips.
+ * Chart palette re-validated with the dataviz six-checks validator against the
+ * current panel surface #0E1729 (dark): #0AA87A / #2C9BE0 / #9D4EE8, all six
+ * checks PASS. Deuteranopia separation is comfortable but the blue-violet pair
+ * is inherently close under tritanopia, so series identity stays doubly encoded
+ * via distinct dash patterns, stroke widths and labelled legend chips.
+ *
+ * This is a categorical palette keyed to entity, deliberately separate from the
+ * status/chain tokens in index.css.
  */
 import clsx from 'clsx';
 import {
@@ -19,12 +23,12 @@ import {
   type TooltipProps,
 } from 'recharts';
 import type { PipelineRecord, Snapshot } from '../types';
-import { Card, EmptyState, ExplorerLink, PanelTitle, fmtTime, truncMiddle, CopyBtn } from './ui';
+import { Card, EmptyState, ExplorerLink, NONE, PanelTitle, fmtTime, truncMiddle, CopyBtn } from './ui';
 
 const SERIES = [
-  { key: 'tokens' as const, label: 'Tokens issued', color: '#059669', dash: undefined, width: 4.5 },
-  { key: 'debits' as const, label: 'Confirmed debits', color: '#0284C7', dash: '8 5', width: 2 },
-  { key: 'records' as const, label: 'On-chain records', color: '#8B5CF6', dash: '2 5', width: 2 },
+  { key: 'tokens' as const, label: 'Tokens issued', color: '#0AA87A', dash: undefined, width: 4.5 },
+  { key: 'debits' as const, label: 'Confirmed debits', color: '#2C9BE0', dash: '8 5', width: 2 },
+  { key: 'records' as const, label: 'On-chain records', color: '#9D4EE8', dash: '2 5', width: 2 },
 ];
 
 function ChartTooltip({ active, payload, label }: TooltipProps<number, string>) {
@@ -64,29 +68,29 @@ function DrilldownRow({ rec }: { rec: PipelineRecord }) {
       <td className="px-3 py-2">
         {rec.token ? (
           <span className="inline-flex items-center gap-0.5">
-            <code className="font-mono text-ok-soft" title={rec.token.nonce}>
+            <code className="font-mono text-local-soft" title={rec.token.nonce}>
               {truncMiddle(rec.token.nonce, 6, 4)}
             </code>
             <CopyBtn text={rec.token.nonce} />
           </span>
         ) : (
-          '—'
+          NONE
         )}
       </td>
       <td className="px-3 py-2">
         {rec.debit ? (
           <span className="inline-flex items-center gap-0.5">
-            <code className="font-mono text-info" title={rec.debit.debitRef}>
+            <code className="font-mono text-local-soft" title={rec.debit.debitRef}>
               {rec.debit.debitRef}
             </code>
             <CopyBtn text={rec.debit.debitRef} />
           </span>
         ) : (
-          '—'
+          NONE
         )}
       </td>
-      <td className="px-3 py-2 text-ink-muted">{rec.signerSet ? rec.signerSet.join(' + ') : '—'}</td>
-      <td className="px-3 py-2">{rec.ledger ? <ExplorerLink url={rec.ledger.explorerUrl} label="tx" /> : '—'}</td>
+      <td className="px-3 py-2 text-ink-muted">{rec.signerSet ? rec.signerSet.join(' + ') : NONE}</td>
+      <td className="px-3 py-2">{rec.ledger ? <ExplorerLink url={rec.ledger.explorerUrl} label="tx" /> : NONE}</td>
     </tr>
   );
 }
@@ -100,7 +104,7 @@ export function ReconPanel({ snap }: { snap: Snapshot }) {
   return (
     <section>
       <PanelTitle
-        title="Reconciliation — internal conservation"
+        title="Reconciliation: internal conservation"
         sub="Tokens issued ⇄ confirmed debits ⇄ on-chain records. The three series must never diverge."
       />
 
@@ -117,8 +121,8 @@ export function ReconPanel({ snap }: { snap: Snapshot }) {
           </div>
           <div className={clsx('mt-1 text-[11px] leading-snug', deltaBad ? 'text-bad-soft' : 'text-ink-faint')}>
             {deltaBad
-              ? 'INTEGRITY FAULT — the pipeline leaked. Investigate immediately.'
-              : 'Internal conservation holds — the pipeline is the only door.'}
+              ? 'INTEGRITY FAULT: the pipeline leaked. Investigate immediately.'
+              : 'Internal conservation holds. The pipeline is the only door.'}
           </div>
         </Card>
       </div>
@@ -137,11 +141,11 @@ export function ReconPanel({ snap }: { snap: Snapshot }) {
             ))}
           </div>
           <span className="ml-auto text-[11px] italic text-ink-faint">
-            the three lines overlay perfectly — that is the story
+            the three lines must overlay perfectly; that is the story
           </span>
         </div>
         {data.length === 0 ? (
-          <EmptyState>No deliveries yet — the series plots one point per delivered token.</EmptyState>
+          <EmptyState>No deliveries yet. The series plots one point per delivered token.</EmptyState>
         ) : (
           <div className="h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
@@ -150,14 +154,14 @@ export function ReconPanel({ snap }: { snap: Snapshot }) {
                 <XAxis
                   dataKey="t"
                   tickFormatter={(v: string) => fmtTime(v)}
-                  tick={{ fill: '#64748b', fontSize: 11 }}
+                  tick={{ fill: '#6B7F9E', fontSize: 11 }}
                   tickLine={false}
                   axisLine={{ stroke: 'rgba(255,255,255,0.12)' }}
                   minTickGap={48}
                 />
                 <YAxis
                   allowDecimals={false}
-                  tick={{ fill: '#64748b', fontSize: 11 }}
+                  tick={{ fill: '#6B7F9E', fontSize: 11 }}
                   tickLine={false}
                   axisLine={false}
                 />
