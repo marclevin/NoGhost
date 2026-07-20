@@ -97,7 +97,7 @@ export function GovernancePanel({ snap }: { snap: Snapshot }) {
           return (
             <Card key={m.signerId} className={clsx('p-4', revoked && 'border-bad/40')}>
               <div className="flex items-center gap-2">
-                <Dot tone={revoked ? 'bad' : 'ok'} pulse={!revoked} />
+                <Dot tone={revoked ? 'bad' : 'ok'} />
                 <span className="font-semibold text-ink">{m.name}</span>
                 <Chip tone={revoked ? 'bad' : 'ok'} className="ml-auto">
                   {m.status}

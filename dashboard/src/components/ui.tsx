@@ -1,6 +1,7 @@
 /** Shared UI primitives: cards, chips, icons (inline SVG only), formatters. */
 import { useState, type ReactNode, type SVGProps } from 'react';
 import clsx from 'clsx';
+import type { Wall } from '../types';
 
 // ---------------------------------------------------------------------------
 // Formatters
@@ -14,6 +15,16 @@ export const fmtZar = (n: number): string =>
 
 /** Rendered in any cell that has no value yet. */
 export const NONE = '·';
+
+const WALL_LABEL: Record<Wall, string> = {
+  POLICY: 'Policy gate',
+  WALL_1_BANK: 'Wall 1: Bank',
+  WALL_2_CONSORTIUM: 'Wall 2: Consortium',
+  LEDGER: 'Ledger',
+};
+
+/** Presentable name for a checkpoint; falls back to the raw wire value. */
+export const wallLabel = (wall: string): string => WALL_LABEL[wall as Wall] ?? wall;
 
 export function fmtTime(iso: string | null | undefined): string {
   if (!iso) return NONE;

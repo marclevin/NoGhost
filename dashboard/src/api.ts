@@ -27,7 +27,13 @@ async function post<T = unknown>(path: string, body?: unknown): Promise<ApiResul
   }
 }
 
-export type ScenarioKind = 'legit' | 'ghost' | 'collusion-short';
+/** Mirrors ScenarioKind in server/src/coordinator/demo.ts. */
+export type ScenarioKind =
+  | 'legit'
+  | 'ghost'
+  | 'collusion-short'
+  | 'forged-attestation'
+  | 'revoked-merchant';
 
 export const api = {
   scenario: (kind: ScenarioKind) =>

@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import clsx from 'clsx';
 import { api, type ScenarioKind } from '../api';
 import type { BankMode, PipelineRecord, Snapshot } from '../types';
-import { Chip, Dot, Spinner, XIcon, CheckIcon } from './ui';
+import { Chip, Dot, Spinner, XIcon, CheckIcon, wallLabel } from './ui';
 
 interface ScenarioDef {
   kind: ScenarioKind;
@@ -35,6 +35,20 @@ const SCENARIOS: ScenarioDef[] = [
     accent: 'border-warn/40 hover:bg-warn/10',
     expected: 'blocked at Wall 2',
   },
+  {
+    kind: 'forged-attestation',
+    title: 'Compromised bank',
+    desc: 'The bank forges a confirmation. The pinned-key check catches it.',
+    accent: 'border-bad/40 hover:bg-bad/10',
+    expected: 'blocked at Wall 1',
+  },
+  {
+    kind: 'revoked-merchant',
+    title: 'Revoked merchant',
+    desc: 'A revoked merchant is stopped at the policy gate, before any debit.',
+    accent: 'border-warn/40 hover:bg-warn/10',
+    expected: 'blocked at the policy gate',
+  },
 ];
 
 const BANK_MODES: BankMode[] = ['CONFIRM', 'DECLINE', 'OMIT_SIGNATURE', 'TIMEOUT'];
@@ -51,7 +65,7 @@ function isTerminal(rec: PipelineRecord): boolean {
 
 function outcomeOf(rec: PipelineRecord): { ok: boolean; label: string } {
   if (rec.status === 'DELIVERED') return { ok: true, label: 'DELIVERED · token issued, Δ stays 0' };
-  const wall = rec.rejection?.wall ?? 'unknown';
+  const wall = rec.rejection ? wallLabel(rec.rejection.wall) : 'unknown';
   // Match the Live Feed verb (statusChip: 'ABANDONED · DEBIT REVERSED') so the
   // two surfaces agree for a request whose terminal status is REJECTED_ABANDONED.
   if (rec.status === 'REJECTED_ABANDONED') return { ok: false, label: `ABANDONED at ${wall} · debit reversed` };
@@ -202,7 +216,10 @@ export function DemoControls({ snap }: { snap: Snapshot }) {
               className="flex items-center gap-2 rounded-lg border border-edge bg-white/3 px-2.5 py-1.5 text-left transition hover:bg-white/6 disabled:opacity-50"
               title={s.online ? 'Take offline' : 'Bring online'}
             >
-              <Dot tone={s.online ? 'ok' : 'bad'} pulse={s.online} />
+              {/* Not pulsed: this is a static online/offline boolean, and an
+                  always-animating dot reads as activity that isn't happening.
+                  Pulsing stays reserved for the live connection indicator. */}
+              <Dot tone={s.online ? 'ok' : 'bad'} />
               <span className="text-[12px] font-medium text-ink">{s.name}</span>
               {signerBusy === s.signerId && <Spinner className="h-3 w-3 text-local" />}
               {/* toggle track */}

@@ -383,15 +383,90 @@ function runCollusion(rec) {
   }, 2800);
 }
 
+/** Bank answers 200 OK but the attestation does not verify against the pinned key. */
+function runForgedAttestation(rec) {
+  state.bank.mode = 'OMIT_SIGNATURE';
+  setTimeout(() => {
+    rec.rejection = {
+      wall: 'WALL_1_BANK',
+      reason: 'BANK_SIGNATURE_INVALID',
+      at: iso(),
+      attribution: rec.request.merchantId,
+    };
+    transition(rec, 'REJECTED', 'bank attestation failed FR-3 verification');
+    pushAlert(
+      'critical',
+      'Ghost-vend attempt blocked at Wall 1',
+      'The bank attestation failed independent signature verification (FR-3): forged or absent confirmation.',
+      rec.request.merchantId,
+      'WALL_1_BANK',
+      rec.request.requestId,
+    );
+  }, 1300);
+  setTimeout(() => {
+    state.bank.mode = 'CONFIRM'; // restore preconditions
+    state.demo.activeScenario = null;
+  }, 2600);
+}
+
+/** Policy gate (FR-19): stopped before any funds movement or signer contact. */
+function runRevokedMerchant(rec) {
+  const m = state.merchants.find((x) => x.merchantId === rec.request.merchantId);
+  if (m) {
+    m.revoked = true;
+    govLog('MERCHANT_REVOKED', m.merchantId, `${m.name} revoked for demo scenario`);
+  }
+  setTimeout(() => {
+    rec.rejection = {
+      wall: 'POLICY',
+      reason: `MERCHANT_REVOKED (${m?.name ?? rec.request.merchantId})`,
+      at: iso(),
+      attribution: rec.request.merchantId,
+    };
+    transition(rec, 'REJECTED', 'merchant revoked at the policy gate');
+    pushAlert(
+      'warning',
+      'Revoked merchant blocked',
+      `Merchant ${m?.name ?? rec.request.merchantId} (${rec.request.merchantId}) is revoked; request rejected (FR-19).`,
+      rec.request.merchantId,
+      'POLICY',
+      rec.request.requestId,
+    );
+  }, 900);
+  setTimeout(() => {
+    if (m) {
+      m.revoked = false;
+      govLog('MERCHANT_REINSTATED', m.merchantId, `${m.name} reinstated after demo scenario`);
+    }
+    state.demo.activeScenario = null;
+  }, 2200);
+}
+
+const SCENARIO_KWH = {
+  legit: 50,
+  ghost: 75,
+  'collusion-short': 30,
+  'forged-attestation': 60,
+  'revoked-merchant': 25,
+};
+
+const SCENARIO_RUNNERS = {
+  legit: runLegit,
+  ghost: runGhost,
+  'collusion-short': runCollusion,
+  'forged-attestation': runForgedAttestation,
+  'revoked-merchant': runRevokedMerchant,
+};
+
+const SCENARIO_KINDS = Object.keys(SCENARIO_RUNNERS);
+
 function startScenario(kind) {
-  const req = makeRequest(kind === 'legit' ? 50 : kind === 'ghost' ? 75 : 30);
+  const req = makeRequest(SCENARIO_KWH[kind] ?? 30);
   const rec = { request: req, status: 'PENDING', history: [{ status: 'PENDING', at: iso() }] };
   state.requests.unshift(rec);
   state.requests = state.requests.slice(0, 200);
   state.demo.activeScenario = kind;
-  if (kind === 'legit') runLegit(rec);
-  else if (kind === 'ghost') runGhost(rec);
-  else runCollusion(rec);
+  SCENARIO_RUNNERS[kind](rec);
   return req.requestId;
 }
 
@@ -441,7 +516,7 @@ const server = createServer((req, res) => {
 
     if (path === '/api/demo/scenario') {
       const kind = body.kind;
-      if (!['legit', 'ghost', 'collusion-short'].includes(kind)) return send(res, 400, { error: 'bad kind' });
+      if (!SCENARIO_KINDS.includes(kind)) return send(res, 400, { error: 'bad kind' });
       const requestId = startScenario(kind);
       return send(res, 202, { requestId, kind });
     }

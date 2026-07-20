@@ -16,15 +16,9 @@ import {
   fmtZar,
   priceZar,
   truncMiddle,
+  wallLabel,
   type Tone,
 } from './ui';
-
-const WALL_LABEL: Record<string, string> = {
-  WALL_1_BANK: 'Wall 1: Bank',
-  WALL_2_CONSORTIUM: 'Wall 2: Consortium',
-  LEDGER: 'Ledger',
-  POLICY: 'Policy gate',
-};
 
 function statusChip(rec: PipelineRecord): { tone: Tone; label: string; busy?: boolean } {
   switch (rec.status) {
@@ -112,7 +106,7 @@ function RequestCard({ rec, merchants }: { rec: PipelineRecord; merchants: Merch
           <div className="mt-3 rounded-lg border border-bad/40 bg-bad/10 px-3 py-2">
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
               <span className="text-[12px] font-bold uppercase tracking-wider text-bad-soft">
-                Blocked at {WALL_LABEL[rec.rejection.wall] ?? rec.rejection.wall}
+                Blocked at {wallLabel(rec.rejection.wall)}
               </span>
               <span className="text-[13px] text-ink">{rec.rejection.reason}</span>
             </div>
