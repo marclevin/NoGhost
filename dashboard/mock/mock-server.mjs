@@ -286,7 +286,41 @@ function transition(rec, status, note) {
   rec.history.push({ status, at: iso(), note });
 }
 
+// The operator's own bank/signer settings, captured before a scenario overrides
+// them so they can be handed back afterwards instead of reset to defaults.
+// Captured by the first scenario in a chain, restored by the last to finish.
+let baseline = null;
+let inFlight = 0;
+
+function captureControls() {
+  return {
+    bankMode: state.bank.mode,
+    signers: state.consortium.signers.map((s) => ({ signerId: s.signerId, online: s.online })),
+  };
+}
+
+/** Precondition helper: scenarios need a known-good starting point. */
+function setControls(bankMode, allSignersOnline) {
+  state.bank.mode = bankMode;
+  if (allSignersOnline) for (const s of state.consortium.signers) s.online = true;
+  refreshQuorum();
+}
+
+function finishScenario() {
+  inFlight = Math.max(0, inFlight - 1);
+  if (inFlight !== 0 || !baseline) return;
+  state.bank.mode = baseline.bankMode;
+  for (const want of baseline.signers) {
+    const live = state.consortium.signers.find((s) => s.signerId === want.signerId);
+    if (live) live.online = want.online;
+  }
+  refreshQuorum();
+  baseline = null;
+  state.demo.activeScenario = null;
+}
+
 function runLegit(rec) {
+  setControls('CONFIRM', true);
   setTimeout(() => {
     rec.debit = makeDebit(rec.request);
     state.bank.lastConfirmationAt = iso();
@@ -326,12 +360,12 @@ function runLegit(rec) {
       meter.dispenses += 1;
     }
     bumpRecon(iso());
-    state.demo.activeScenario = null;
+    finishScenario();
   }, 4800);
 }
 
 function runGhost(rec) {
-  state.bank.mode = 'DECLINE';
+  setControls('DECLINE', false);
   setTimeout(() => {
     rec.rejection = {
       wall: 'WALL_1_BANK',
@@ -350,13 +384,11 @@ function runGhost(rec) {
       rec.request.requestId,
     );
   }, 1200);
-  setTimeout(() => {
-    state.bank.mode = 'CONFIRM'; // restore preconditions
-    state.demo.activeScenario = null;
-  }, 2400);
+  setTimeout(finishScenario, 2400);
 }
 
 function runCollusion(rec) {
+  setControls('CONFIRM', true);
   for (const s of state.consortium.signers) if (s.signerId !== 'utility') s.online = false;
   refreshQuorum();
   setTimeout(() => {
@@ -376,16 +408,12 @@ function runCollusion(rec) {
       rec.request.requestId,
     );
   }, 1400);
-  setTimeout(() => {
-    for (const s of state.consortium.signers) s.online = true; // restore
-    refreshQuorum();
-    state.demo.activeScenario = null;
-  }, 2800);
+  setTimeout(finishScenario, 2800);
 }
 
 /** Bank answers 200 OK but the attestation does not verify against the pinned key. */
 function runForgedAttestation(rec) {
-  state.bank.mode = 'OMIT_SIGNATURE';
+  setControls('OMIT_SIGNATURE', true);
   setTimeout(() => {
     rec.rejection = {
       wall: 'WALL_1_BANK',
@@ -403,14 +431,12 @@ function runForgedAttestation(rec) {
       rec.request.requestId,
     );
   }, 1300);
-  setTimeout(() => {
-    state.bank.mode = 'CONFIRM'; // restore preconditions
-    state.demo.activeScenario = null;
-  }, 2600);
+  setTimeout(finishScenario, 2600);
 }
 
 /** Policy gate (FR-19): stopped before any funds movement or signer contact. */
 function runRevokedMerchant(rec) {
+  setControls('CONFIRM', true);
   const m = state.merchants.find((x) => x.merchantId === rec.request.merchantId);
   if (m) {
     m.revoked = true;
@@ -434,11 +460,13 @@ function runRevokedMerchant(rec) {
     );
   }, 900);
   setTimeout(() => {
+    // Merchant revocation is scoped to this scenario, so it is always undone here
+    // rather than deferred to the shared baseline.
     if (m) {
       m.revoked = false;
       govLog('MERCHANT_REINSTATED', m.merchantId, `${m.name} reinstated after demo scenario`);
     }
-    state.demo.activeScenario = null;
+    finishScenario();
   }, 2200);
 }
 
@@ -466,6 +494,8 @@ function startScenario(kind) {
   state.requests.unshift(rec);
   state.requests = state.requests.slice(0, 200);
   state.demo.activeScenario = kind;
+  if (inFlight === 0) baseline = captureControls();
+  inFlight += 1;
   SCENARIO_RUNNERS[kind](rec);
   return req.requestId;
 }
